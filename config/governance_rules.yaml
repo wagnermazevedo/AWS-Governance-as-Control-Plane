@@ -1,21 +1,13 @@
 apiVersion: governance.shcp/v1
 kind: GovernanceRuleMap
 rules:
-  - name: "S3 Bucket Missing Required Tag"
+  - name: "S3 Server-Side Encryption Enforcement"
     match_contains:
-      - "s3-bucket-required-tags"
-      - "REQUIRED_TAGS"
+      - "s3-bucket-server-side-encryption-enabled"
+      - "server-side-encryption"
     action: "apply_resource_tags"
     params:
       tags:
-        Environment: "Audit-Managed"
-        GovernanceStatus: "Auto-Remediated"
-    note: "Aplica tags obrigatorias em buckets sem tagging de governança"
-
-  - name: "EBS Volume Non-Compliant Encryption"
-    match_contains:
-      - "encrypted-volumes"
-      - "ebs-resources"
-    action: "enable_ebs_encryption_default"
-    params: {}
-    note: "Ativa criptografia default regional para conformidade com guardrail"
+        GovernanceStatus: "NonCompliant-Encryption"
+        RemediationAction: "Enforce-SSE-S3"
+    note: "Marca recursos e aciona compliance de criptografia default"
