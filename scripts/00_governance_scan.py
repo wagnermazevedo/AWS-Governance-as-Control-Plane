@@ -6,20 +6,21 @@ import boto3
 
 def get_config_non_compliant_resources(config_client):
     items = []
-    paginator = config_client.get_paginator('describe_compliance_by_config_rule')
-    
     try:
-        for page in paginator.paginate(ComplianceTypes=['NON_COMPLIANT']):
+        paginator = config_client.get_paginator('describe_compliance_by_config_rule')
+        # Busca regras com falha ou pendentes de dados para avaliação de postura
+        for page in paginator.paginate(ComplianceTypes=['NON_COMPLIANT', 'INSUFFICIENT_DATA']):
             for rule in page.get('ComplianceByConfigRules', []):
                 rule_name = rule.get('ConfigRuleName')
+                status = rule.get('Compliance', {}).get('ComplianceType', 'NON_COMPLIANT')
                 items.append({
                     "ruleName": rule_name,
-                    "complianceType": "NON_COMPLIANT",
+                    "complianceType": status,
                     "resourceType": "AWS::Config::ConfigRule"
                 })
     except Exception as e:
-        print(f"[WARN] Nenhuma regra não-conforme encontrada ou AWS Config inativo: {e}")
-        
+        print(f"[WARN] Consulta ao AWS Config falhou ou em processamento: {e}")
+
     return items
 
 def main():
@@ -74,7 +75,7 @@ def main():
         yaml.safe_dump(export, f, sort_keys=False)
 
     print(f"[OK] Governance Scan concluído: {out_path}")
-    print(f" - Recursos/Regras Não-Conformes: {len(non_compliant)}")
+    print(f" - Recursos/Regras Não-Conformes ou Pendentes: {len(non_compliant)}")
 
 if __name__ == "__main__":
     main()
