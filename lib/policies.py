@@ -10,6 +10,7 @@ from lib.io import repo_path
 # Limites de tamanho do AWS Organizations (caracteres do documento enviado).
 SIZE_LIMITS = {
     "SERVICE_CONTROL_POLICY": 5120,
+    "RESOURCE_CONTROL_POLICY": 5120,
     "TAG_POLICY": 10000,
 }
 

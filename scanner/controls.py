@@ -79,7 +79,7 @@ def expected_state(control: str, params: Dict[str, Any]) -> Dict[str, Any]:
         return {"featureSet": "ALL"}
     if control == "GOV.2":
         return {"policyType": params.get("policy_type"), "status": "ENABLED"}
-    if control in ("GOV.3", "GOV.4", "GOV.5"):
+    if params.get("policy_file"):
         desired = load_policy(params["policy_file"], params)
         return {
             "policyName": params["policy_name"],
@@ -112,11 +112,19 @@ def _error_detail(err: Exception) -> str:
     return str(err)
 
 
+def policy_controls(rules: Dict[str, Any]) -> List[str]:
+    """Controles de política por OU: toda regra cuja ação é ensure_policy_attached
+    (GOV.3, GOV.4, GOV.5 e qualquer controle novo que você adicionar no mapa)."""
+    return sorted(c for c, r in rules.items() if (r or {}).get("action") == "ensure_policy_attached")
+
+
 def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
     """Avalia todos os controles. Devolve (contexto da organização, itens)."""
     rules = rules_doc.get("rules", {}) or {}
     exc_cfg = rules_doc.get("exception", {}) or {}
     target_names = set((rules_doc.get("targets", {}) or {}).get("ou_names", []) or [])
+    policy_ctrls = policy_controls(rules)
+    downstream = ["GOV.2", *policy_ctrls, "GOV.6"]
     items: List[Dict[str, Any]] = []
     context: Dict[str, Any] = {"organizationId": None, "managementAccountId": None, "rootId": None}
 
@@ -130,7 +138,7 @@ def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[
                   else "Rode a partir da conta de gerenciamento ou de um administrador delegado. " + _error_detail(err))
         items.append(_item("GOV.1", rules.get("GOV.1", {}), status,
                            {"type": "AWS::Organizations::Organization", "id": None}, {"error": code}, detail))
-        for control in ("GOV.2", "GOV.3", "GOV.4", "GOV.5", "GOV.6"):
+        for control in downstream:
             items.append(_item(control, rules.get(control, {}), NOT_APPLICABLE,
                                {"type": "AWS::Organizations::Organization", "id": None}, {}, "Depende do GOV.1"))
         return context, items
@@ -145,7 +153,7 @@ def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[
     try:
         root = orgapi.get_root(org)
     except ClientError as err:
-        for control in ("GOV.2", "GOV.3", "GOV.4", "GOV.5", "GOV.6"):
+        for control in downstream:
             items.append(_item(control, rules.get(control, {}), ERROR, org_resource, {}, _error_detail(err)))
         return context, items
 
@@ -156,10 +164,10 @@ def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[
     status, state = check_policy_type_enabled(root, (rule.get("params") or {}).get("policy_type", "SERVICE_CONTROL_POLICY"))
     items.append(_item("GOV.2", rule, status, root_resource, state))
 
-    # GOV.3 a GOV.5: avaliados em cada OU alvo do mapa de regras.
+    # Controles de política (GOV.3 em diante): avaliados em cada OU alvo do mapa de regras.
     ous = [ou for ou in orgapi.list_ous_recursive(org, root["Id"]) if ou["Name"] in target_names]
     missing = sorted(target_names - {ou["Name"] for ou in ous})
-    for control in ("GOV.3", "GOV.4", "GOV.5"):
+    for control in policy_ctrls:
         rule = rules.get(control, {})
         params = rule.get("params") or {}
         for ou in ous:

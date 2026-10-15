@@ -27,7 +27,7 @@ from scanner.controls import MANAGED_TAG_KEY, MANAGED_TAG_VALUE
 
 STATE_FILE = repo_path("lab_insecure", ".lab_state.json")
 TEMPLATE = repo_path("lab_insecure", "governance-lab.yaml")
-POLICY_TYPES = ("SERVICE_CONTROL_POLICY", "TAG_POLICY")
+POLICY_TYPES = ("SERVICE_CONTROL_POLICY", "RESOURCE_CONTROL_POLICY", "TAG_POLICY")
 
 
 def _code(err):

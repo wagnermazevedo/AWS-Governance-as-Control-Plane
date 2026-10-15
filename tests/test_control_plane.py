@@ -202,3 +202,36 @@ class FullCycle(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NewPolicyControl(unittest.TestCase):
+    """Adicionar uma política nova é só JSON em policies/ + uma regra no mapa (aqui, um GOV.7 com RCP)."""
+
+    def test_new_rule_is_scanned_and_applied_without_code_changes(self):
+        from remediate import REGISTRY
+        from scanner.controls import evaluate
+
+        rcp = {"Version": "2012-10-17", "Statement": [{
+            "Sid": "DenyS3OutsideOrg", "Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": "*",
+            "Condition": {"StringNotEqualsIfExists": {"aws:PrincipalOrgID": "o-exemplo"},
+                          "BoolIfExists": {"aws:PrincipalIsAWSService": "false"}}}]}
+        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+            json.dump(rcp, f)
+        rules_doc = load_yaml(RULES)
+        params = {"policy_type": "RESOURCE_CONTROL_POLICY", "policy_name": "rcp-gov-s3-org-only",
+                  "policy_file": f.name, "enable_type_if_needed": True}
+        rules_doc["rules"]["GOV.7"] = {"title": "RCP: S3 só para identidades da organização", "decision": "AUTO",
+                                       "action": "ensure_policy_attached", "params": params}
+
+        org = lab_org()
+        _, items = evaluate(org, rules_doc)
+        lab = by_control(items, "GOV.7", "SCP-Lab")
+        self.assertEqual(lab[0]["status"], "FAIL")
+        self.assertEqual(len(by_control(items, "GOV.7")), 2)  # SCP-Lab e SCP-Lab-Exception
+
+        outcome = REGISTRY["ensure_policy_attached"](org, lab[0], params, {}, False)
+        self.assertTrue(outcome["ok"], outcome)
+        self.assertIn("VERIFIED", outcome["message"])
+        _, items = evaluate(org, rules_doc)
+        self.assertEqual(by_control(items, "GOV.7", "SCP-Lab")[0]["status"], "PASS")
+        os.remove(f.name)

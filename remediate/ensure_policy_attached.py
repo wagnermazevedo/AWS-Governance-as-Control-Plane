@@ -1,4 +1,4 @@
-"""GOV.3, GOV.4 e GOV.5: garante que a política do repositório exista, esteja
+"""GOV.3 em diante (toda regra com action ensure_policy_attached): garante que a política do repositório exista, esteja
 com o conteúdo versionado e anexada à OU alvo.
 
 Guardrails da própria ação:
