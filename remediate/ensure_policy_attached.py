@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 from scanner import org as orgapi
 from remediate.enable_policy_type import enable as enable_type
 from scanner.controls import MANAGED_TAG_KEY, MANAGED_TAG_VALUE, PASS, check_policy_attached
-from lib.policies import check_size, compact, load_policy, same_policy
+from lib.policies import MAX_ATTACHED, check_size, compact, load_policy, same_policy
 
 
 def run(org, item: Dict[str, Any], params: Dict[str, Any], sim: Dict[str, Any], dry_run: bool) -> Dict[str, Any]:
@@ -81,6 +81,17 @@ def run(org, item: Dict[str, Any], params: Dict[str, Any], sim: Dict[str, Any], 
                 break
     attach_key = (policy_id, target_id)
     if not attached and attach_key not in sim.setdefault("attached", set()):
+        # Cota de políticas por OU: com o Control Tower ela enche rápido. Melhor parar com
+        # uma mensagem clara do que receber ConstraintViolationException no meio do apply.
+        limit = MAX_ATTACHED.get(policy_type)
+        direct = len(orgapi.attached_policy_ids(org, target_id, policy_type))
+        pending = sum(1 for (pid, tid) in sim["attached"] if tid == target_id and sim.get("types", {}).get(pid) == policy_type)
+        if limit and direct + pending >= limit:
+            return {"ok": False, "changes": changes,
+                    "message": " | ".join(notes + [f"QUOTA: a OU {target_id} já tem {direct + pending} {policy_type} "
+                                                   f"anexadas (limite {limit}). Com Control Tower, as SCPs dos controles "
+                                                   "dele contam aqui; junte políticas ou anexe numa OU acima"])}
+        sim.setdefault("types", {})[policy_id] = policy_type
         changes.append({"api": "AttachPolicy", "PolicyId": policy_id, "TargetId": target_id})
         if dry_run:
             notes.append(f"DRY-RUN: anexaria {name} à OU {target_id}")

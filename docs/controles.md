@@ -8,6 +8,8 @@
 | GOV.4 | `scp-gov-region-guardrail` na OU | AUTO | `ensure_policy_attached` | Padrão `us-east-1` e `sa-east-1`; serviços globais isentos |
 | GOV.5 | `tag-gov-required-tags` na OU | AUTO | `ensure_policy_attached` | Habilita TAG_POLICY se preciso; padroniza `Environment`, `Owner`, `CostCenter` |
 | GOV.6 | Contas-membro direto na raiz | MANUAL | — | Mover conta muda as políticas herdadas |
+| GOV.7 | AWS Config agregando a organização | MANUAL | — | Passa com agregador organizacional nesta conta ou administrador delegado do Config (ex.: conta Audit) |
+| GOV.8 | Control Tower: controles nas OUs alvo | MANUAL | — | `NOT_APPLICABLE` sem landing zone; FAIL se a OU não tem controles ou tem controle em drift |
 
 Status do scan: `PASS`, `FAIL` (com motivo, por exemplo `POLICY_MISSING`, `NOT_ATTACHED` ou `CONTENT_DRIFT`), `NOT_APPLICABLE` e `ERROR`.
 

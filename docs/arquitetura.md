@@ -5,7 +5,7 @@
                                         │
                                         ▼
  00_governance_scan.py ── Organizations (Describe/List) ──► scanner/org.py      (leitura da organização)
-                                                     └──► scanner/controls.py (GOV.1 a GOV.6, drift)
+                                                     └──► scanner/controls.py (GOV.1 a GOV.8, drift)
                                         │
                      outputs/<ts>/governance_scan_export.yaml
                                         │

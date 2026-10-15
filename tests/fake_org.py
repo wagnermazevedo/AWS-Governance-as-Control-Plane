@@ -24,6 +24,8 @@ PAGINATED_KEYS = {
     "list_policies_for_target": "Policies",
     "list_tags_for_resource": "Tags",
     "list_accounts_for_parent": "Accounts",
+    "list_aws_service_access_for_organization": "EnabledServicePrincipals",
+    "list_delegated_administrators": "DelegatedAdministrators",
 }
 
 
@@ -54,6 +56,8 @@ class FakeOrg:
         self.attachments = set()   # (policy_id, target_id)
         self.tags = {}             # resource_id -> {k: v}
         self.calls = []
+        self.service_access = []   # service principals com trusted access
+        self.delegated = {}        # service principal -> [account ids]
 
     # ---- infraestrutura -------------------------------------------------
     def _check(self, name, params):
@@ -123,6 +127,15 @@ class FakeOrg:
     def list_tags_for_resource(self, **kw):
         self._check("list_tags_for_resource", kw)
         return {"Tags": [{"Key": k, "Value": v} for k, v in self.tags.get(kw["ResourceId"], {}).items()]}
+
+    def list_aws_service_access_for_organization(self, **kw):
+        self._check("list_aws_service_access_for_organization", kw)
+        return {"EnabledServicePrincipals": [{"ServicePrincipal": p} for p in self.service_access]}
+
+    def list_delegated_administrators(self, **kw):
+        self._check("list_delegated_administrators", kw)
+        ids = self.delegated.get(kw.get("ServicePrincipal"), [])
+        return {"DelegatedAdministrators": [{"Id": i, "Name": f"audit-{i[-4:]}"} for i in ids]}
 
     def list_accounts_for_parent(self, **kw):
         self._check("list_accounts_for_parent", kw)

@@ -15,6 +15,15 @@ SIZE_LIMITS = {
 }
 
 
+# Máximo de políticas anexadas DIRETAMENTE a uma OU, por tipo (cota do AWS Organizations).
+# Com o Control Tower, as SCPs dos controles dele também contam para esse limite.
+MAX_ATTACHED = {
+    "SERVICE_CONTROL_POLICY": 5,
+    "RESOURCE_CONTROL_POLICY": 5,
+    "TAG_POLICY": 10,
+}
+
+
 def load_policy(policy_file: str, params: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Lê a política do repositório e aplica os parâmetros do mapa de regras."""
     with open(repo_path(policy_file), "r", encoding="utf-8") as f:

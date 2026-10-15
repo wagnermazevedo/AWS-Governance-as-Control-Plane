@@ -17,7 +17,7 @@ import _bootstrap  # noqa: F401
 from lib import API_VERSION
 from lib.aws import client, session
 from scanner.controls import evaluate
-from lib.io import load_yaml, markdown_table, new_run_dir, repo_path, utc_timestamp, write_csv, write_json, write_text, write_yaml
+from lib.io import DEFAULT_OUTPUTS, load_yaml, markdown_table, new_run_dir, repo_path, utc_timestamp, write_csv, write_json, write_text, write_yaml
 
 CSV_FIELDS = ["id", "control", "status", "resource_type", "resource_id", "resource_name", "reason", "detail"]
 
@@ -41,7 +41,7 @@ def main():
     parser.add_argument("--region", required=True)
     parser.add_argument("--profile", default=None)
     parser.add_argument("--rules", default=repo_path("config", "governance_rules.yaml"))
-    parser.add_argument("--output-dir", default="outputs")
+    parser.add_argument("--output-dir", default=DEFAULT_OUTPUTS, help="Padrão: outputs/ do repositório")
     args = parser.parse_args()
 
     rules_doc = load_yaml(args.rules)
@@ -49,7 +49,8 @@ def main():
     org = client(sess, "organizations")
     caller = client(sess, "sts").get_caller_identity()
 
-    context, items = evaluate(org, rules_doc)
+    clients = {"config": client(sess, "config"), "controltower": client(sess, "controltower")}
+    context, items = evaluate(org, rules_doc, clients)
     for idx, item in enumerate(items, start=1):
         item["id"] = f"gov-item-{idx:06d}"
 
@@ -61,7 +62,7 @@ def main():
         "metadata": {
             "generatedAt": timestamp,
             "region": args.region,
-            "source": "aws:organizations",
+            "source": "aws:organizations,aws:config,aws:controltower",
             "callerAccountId": caller.get("Account"),
             "organization": context,
             "rulesFile": os.path.relpath(args.rules, repo_path()),

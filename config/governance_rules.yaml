@@ -76,3 +76,23 @@ rules:
     decision: MANUAL
     reason: "Mover conta de OU muda as políticas herdadas; é decisão de arquitetura, não de script"
     mitre: []
+
+  # Camada detectiva: o AWS Config precisa enxergar a organização inteira.
+  # Só leitura: criar o agregador exige uma role e, de preferência, a conta Audit
+  # como administradora delegada (é o que o Control Tower faz).
+  GOV.7:
+    title: "AWS Config agregando a organização (agregador ou administrador delegado)"
+    decision: MANUAL
+    reason: "Agregador organizacional fica na conta de auditoria, com role própria; configure pelo Control Tower ou pelo runbook"
+    runbook: "https://docs.aws.amazon.com/config/latest/developerguide/aggregate-data.html"
+    mitre:
+      - T1562.008  # Impair Defenses: Disable or Modify Cloud Logs
+
+  # Control Tower, quando existe: landing zone e controles habilitados nas OUs alvo.
+  # Sem Control Tower o item fica NOT_APPLICABLE, e as SCPs do GOV.3 e GOV.4 fazem o papel preventivo.
+  GOV.8:
+    title: "Control Tower com controles habilitados nas OUs alvo"
+    decision: MANUAL
+    reason: "Registrar a OU e habilitar controles é feito pelo Control Tower (console, EnableBaseline ou EnableControl), que é o dono desses controles"
+    runbook: "https://docs.aws.amazon.com/controltower/latest/controlreference/controls.html"
+    mitre: []

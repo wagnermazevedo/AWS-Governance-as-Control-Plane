@@ -16,7 +16,7 @@ import _bootstrap  # noqa: F401
 
 from lib import API_VERSION
 from scanner.controls import expected_state
-from lib.io import load_yaml, write_yaml
+from lib.io import DEFAULT_OUTPUTS, DEFAULT_PLAN, latest_file, repo_path, load_yaml, write_yaml
 
 
 def decide(item: Dict[str, Any], rules: Dict[str, Any], exc_cfg: Dict[str, Any]) -> Tuple[str, str, str, Dict[str, Any]]:
@@ -52,10 +52,18 @@ def decide(item: Dict[str, Any], rules: Dict[str, Any], exc_cfg: Dict[str, Any])
 
 def main():
     parser = argparse.ArgumentParser(description="AWS Governance Plan (não altera recursos)")
-    parser.add_argument("--input-yaml", required=True, help="YAML gerado pelo 00_governance_scan.py")
-    parser.add_argument("--rules", required=True, help="Caminho do config/governance_rules.yaml")
-    parser.add_argument("--output-yaml", required=True, help="Caminho do plano gerado")
+    parser.add_argument("--input-yaml", default=None,
+                        help="YAML gerado pelo 00_governance_scan.py. Padrão: o scan mais recente em outputs/")
+    parser.add_argument("--output-dir", default=DEFAULT_OUTPUTS, help="Onde procurar o scan mais recente")
+    parser.add_argument("--rules", default=repo_path("config", "governance_rules.yaml"), help="Caminho do config/governance_rules.yaml")
+    parser.add_argument("--output-yaml", default=DEFAULT_PLAN, help="Padrão: outputs/remediation_plan.yaml")
     args = parser.parse_args()
+    if not args.input_yaml:
+        try:
+            args.input_yaml = latest_file(args.output_dir, "governance_scan_export.yaml")
+        except FileNotFoundError as err:
+            raise SystemExit(f"[ERRO] {err}")
+        print(f"[INFO] Usando o scan mais recente: {args.input_yaml}")
 
     doc = load_yaml(args.input_yaml)
     if doc.get("kind") != "GovernanceFindingsExport":

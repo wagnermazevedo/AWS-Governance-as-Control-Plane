@@ -16,7 +16,7 @@ import _bootstrap  # noqa: F401
 from lib import API_VERSION
 from remediate import REGISTRY
 from lib.aws import client, session
-from lib.io import load_yaml, markdown_table, new_run_dir, utc_timestamp, write_csv, write_json, write_text
+from lib.io import DEFAULT_OUTPUTS, DEFAULT_PLAN, load_yaml, markdown_table, new_run_dir, utc_timestamp, write_csv, write_json, write_text
 
 CSV_FIELDS = ["itemId", "control", "decision", "action", "resource", "ok", "message"]
 
@@ -25,11 +25,13 @@ def main():
     parser = argparse.ArgumentParser(description="AWS Governance Remediate")
     parser.add_argument("--region", required=True)
     parser.add_argument("--profile", default=None)
-    parser.add_argument("--yaml", required=True, help="Plano gerado pelo 01_governance_plan.py")
+    parser.add_argument("--yaml", default=DEFAULT_PLAN, help="Plano gerado pelo 01_governance_plan.py. Padrão: outputs/remediation_plan.yaml")
     parser.add_argument("--mode", choices=["dry-run", "apply"], default="dry-run")
-    parser.add_argument("--output-dir", default="outputs")
+    parser.add_argument("--output-dir", default=DEFAULT_OUTPUTS)
     args = parser.parse_args()
 
+    if not os.path.exists(args.yaml):
+        raise SystemExit(f"[ERRO] Plano não encontrado: {args.yaml}. Rode o 01 (plan) antes do remediate.")
     plan = load_yaml(args.yaml)
     if plan.get("kind") != "GovernanceRemediationPlan":
         raise SystemExit(f"[ERRO] {args.yaml} não é um plano (kind={plan.get('kind')}). Rode o 01_governance_plan.py")

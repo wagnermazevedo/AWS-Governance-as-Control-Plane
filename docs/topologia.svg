@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 760" width="1100" height="760" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 900" width="1100" height="900" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif">
 <title>AWS Governance as Control Plane: a topologia</title>
 <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#4b5563"/></marker><marker id="ahg" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2e9e62"/></marker></defs>
-<rect x="0" y="0" width="1100" height="760" rx="16" fill="#ffffff"/>
+<rect x="0" y="0" width="1100" height="900" rx="16" fill="#ffffff"/>
 <text x="32" y="44" font-size="22" font-weight="700" fill="#111827">AWS Governance as Control Plane: a topologia</text>
-<text x="32" y="70" font-size="14" fill="#4b5563">Guardrails da organização inteira, versionados no repositório e aplicados só onde você mandou</text>
+<text x="32" y="70" font-size="14" fill="#4b5563">Três camadas sobre o AWS Organizations: Control Tower, AWS Config e SCPs, versionadas e aplicadas só onde você mandou</text>
 <rect x="32" y="96" width="1036" height="330" rx="14" fill="#f3f4f6" fill-opacity="0.45" stroke="#8b93a1" stroke-width="1.5" stroke-dasharray="6 5"/>
 <text x="48" y="120" font-size="13" font-weight="700" fill="#2f3542" letter-spacing="0.4">AWS ORGANIZATIONS  ·  ORGANIZAÇÃO DE TESTES</text>
 <rect x="56" y="130" width="260" height="92" rx="10" fill="#f3f4f6" stroke="#8b93a1" stroke-width="1.6"/>
@@ -44,49 +44,63 @@
 <text x="758" y="344" font-size="12.5" fill="#374151">GOV.4 scp-gov-region-guardrail</text>
 <text x="758" y="362" font-size="12.5" fill="#374151">GOV.5 tag-gov-required-tags</text>
 <text x="758" y="380" font-size="12.5" fill="#374151">+ conta de testes (--move-account)</text>
-<rect x="32" y="460" width="1036" height="236" rx="14" fill="#eef4ff" fill-opacity="0.45" stroke="#3b6fd8" stroke-width="1.5" stroke-dasharray="6 5"/>
-<text x="48" y="484" font-size="13" font-weight="700" fill="#1e3a7a" letter-spacing="0.4">REPOSITÓRIO  ·  AWS-Governance-as-Control-Plane</text>
-<rect x="56" y="496" width="200" height="104" rx="10" fill="#eef4ff" stroke="#3b6fd8" stroke-width="1.6"/>
-<text x="70" y="520" font-size="14.5" font-weight="700" fill="#1e3a7a">policies/*.json</text>
-<text x="70" y="542" font-size="12.5" fill="#374151">a fonte da verdade:</text>
-<text x="70" y="560" font-size="12.5" fill="#374151">SCPs e tag policy</text>
-<text x="70" y="578" font-size="12.5" fill="#374151">versionadas</text>
-<rect x="296" y="496" width="200" height="104" rx="10" fill="#eef4ff" stroke="#3b6fd8" stroke-width="1.6"/>
-<text x="310" y="520" font-size="14.5" font-weight="700" fill="#1e3a7a">00 · Scan</text>
-<rect x="443" y="505" width="43" height="20" rx="10" fill="#3b6fd8"/>
-<text x="464.5" y="519" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">SÓ LÊ</text>
-<text x="310" y="542" font-size="12.5" fill="#374151">sobe a árvore até a raiz</text>
-<text x="310" y="560" font-size="12.5" fill="#374151">compara com policies/</text>
-<text x="310" y="578" font-size="12.5" fill="#374151">(CONTENT_DRIFT)</text>
-<rect x="536" y="496" width="200" height="104" rx="10" fill="#e9f7f8" stroke="#2a9aa6" stroke-width="1.6"/>
-<text x="550" y="520" font-size="14.5" font-weight="700" fill="#114e55">01 · Plan</text>
-<rect x="676" y="505" width="50" height="20" rx="10" fill="#2a9aa6"/>
-<text x="701.0" y="519" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">DECIDE</text>
-<text x="550" y="542" font-size="12.5" fill="#374151">AUTO · MANUAL</text>
-<text x="550" y="560" font-size="12.5" fill="#374151">EXCEPTION · NO_ACTION</text>
-<text x="550" y="578" font-size="12.5" fill="#374151">GOV.2 sempre primeiro</text>
-<rect x="776" y="496" width="268" height="104" rx="10" fill="#ecf8f1" stroke="#2e9e62" stroke-width="1.6"/>
-<text x="790" y="520" font-size="14.5" font-weight="700" fill="#145233">02 · Remediate</text>
-<rect x="977" y="505" width="57" height="20" rx="10" fill="#2e9e62"/>
-<text x="1005.5" y="519" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">DRY-RUN</text>
-<text x="790" y="542" font-size="12.5" fill="#374151">anexa só nas OUs alvo</text>
-<text x="790" y="560" font-size="12.5" fill="#374151">só políticas ManagedBy</text>
-<text x="790" y="578" font-size="12.5" fill="#374151">confere no final: VERIFIED</text>
-<path d="M256,548 L296,548" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
-<path d="M496,548 L536,548" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
-<path d="M736,548 L776,548" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
-<rect x="56" y="622" width="440" height="56" rx="10" fill="#fff6e5" stroke="#d18a14" stroke-width="1.6"/>
-<text x="70" y="646" font-size="14.5" font-weight="700" fill="#6b4405">99 · Lab setup</text>
-<text x="70" y="668" font-size="12.5" fill="#374151">cria as OUs · --move-account · --simulate-drift · --destroy</text>
-<rect x="536" y="622" width="240" height="56" rx="10" fill="#e9f7f8" stroke="#2a9aa6" stroke-width="1.6"/>
-<text x="550" y="646" font-size="14.5" font-weight="700" fill="#114e55">config/governance_rules.yaml</text>
-<text x="550" y="668" font-size="12.5" fill="#374151">targets · exceções · regras</text>
-<path d="M656,622 L656,602" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
-<path d="M396,426 L396,496" fill="none" stroke="#3b6fd8" stroke-width="1.8" marker-end="url(#ah)"/>
-<rect x="334.0" y="437" width="124.0" height="18" rx="4" fill="#ffffff" fill-opacity="0.92"/>
-<text x="396" y="450" font-size="12" fill="#1e3a7a" text-anchor="middle">lê a organização</text>
-<path d="M910,496 L910,408" fill="none" stroke="#2e9e62" stroke-width="1.8" marker-end="url(#ahg)"/>
-<rect x="799.0" y="437" width="222.0" height="18" rx="4" fill="#ffffff" fill-opacity="0.92"/>
-<text x="910" y="450" font-size="12" fill="#145233" text-anchor="middle">cria, restaura e anexa (apply)</text>
-<text x="550" y="730" font-size="12.5" fill="#4b5563" text-anchor="middle">Política nova = um JSON em policies/ + uma regra com action: ensure_policy_attached no governance_rules.yaml</text>
+<rect x="32" y="446" width="1036" height="130" rx="14" fill="#f4f0fd" fill-opacity="0.45" stroke="#7b5cd6" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="48" y="470" font-size="13" font-weight="700" fill="#3d2a7a" letter-spacing="0.4">CAMADAS DE GOVERNANÇA  ·  QUEM JÁ TEM DONO, O MÓDULO SÓ LÊ</text>
+<rect x="56" y="482" width="470" height="80" rx="10" fill="#f4f0fd" stroke="#7b5cd6" stroke-width="1.6"/>
+<text x="70" y="506" font-size="14.5" font-weight="700" fill="#3d2a7a">AWS Control Tower (se houver)</text>
+<rect x="473" y="491" width="43" height="20" rx="10" fill="#7b5cd6"/>
+<text x="494.5" y="505" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">GOV.8</text>
+<text x="70" y="528" font-size="12.5" fill="#374151">landing zone, contas Log Archive e Audit; controles preventivos (SCP),</text>
+<text x="70" y="546" font-size="12.5" fill="#374151">detectivos (regras do Config) e proativos (hooks do CloudFormation)</text>
+<rect x="550" y="482" width="494" height="80" rx="10" fill="#e9f7f8" stroke="#2a9aa6" stroke-width="1.6"/>
+<text x="564" y="506" font-size="14.5" font-weight="700" fill="#114e55">AWS Config</text>
+<rect x="991" y="491" width="43" height="20" rx="10" fill="#2a9aa6"/>
+<text x="1012.5" y="505" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">GOV.7</text>
+<text x="564" y="528" font-size="12.5" fill="#374151">grava e avalia cada configuração, em todas as contas;</text>
+<text x="564" y="546" font-size="12.5" fill="#374151">agregador na conta Audit · é quem avalia os controles do Security Hub</text>
+<rect x="32" y="600" width="1036" height="236" rx="14" fill="#eef4ff" fill-opacity="0.45" stroke="#3b6fd8" stroke-width="1.5" stroke-dasharray="6 5"/>
+<text x="48" y="624" font-size="13" font-weight="700" fill="#1e3a7a" letter-spacing="0.4">REPOSITÓRIO  ·  AWS-Governance-as-Control-Plane</text>
+<rect x="56" y="636" width="200" height="104" rx="10" fill="#eef4ff" stroke="#3b6fd8" stroke-width="1.6"/>
+<text x="70" y="660" font-size="14.5" font-weight="700" fill="#1e3a7a">policies/*.json</text>
+<text x="70" y="682" font-size="12.5" fill="#374151">a fonte da verdade:</text>
+<text x="70" y="700" font-size="12.5" fill="#374151">SCPs e tag policy</text>
+<text x="70" y="718" font-size="12.5" fill="#374151">versionadas</text>
+<rect x="296" y="636" width="200" height="104" rx="10" fill="#eef4ff" stroke="#3b6fd8" stroke-width="1.6"/>
+<text x="310" y="660" font-size="14.5" font-weight="700" fill="#1e3a7a">00 · Scan</text>
+<rect x="443" y="645" width="43" height="20" rx="10" fill="#3b6fd8"/>
+<text x="464.5" y="659" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">SÓ LÊ</text>
+<text x="310" y="682" font-size="12.5" fill="#374151">sobe a árvore até a raiz</text>
+<text x="310" y="700" font-size="12.5" fill="#374151">compara com policies/</text>
+<text x="310" y="718" font-size="12.5" fill="#374151">lê Config e Control Tower</text>
+<rect x="536" y="636" width="200" height="104" rx="10" fill="#e9f7f8" stroke="#2a9aa6" stroke-width="1.6"/>
+<text x="550" y="660" font-size="14.5" font-weight="700" fill="#114e55">01 · Plan</text>
+<rect x="676" y="645" width="50" height="20" rx="10" fill="#2a9aa6"/>
+<text x="701.0" y="659" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">DECIDE</text>
+<text x="550" y="682" font-size="12.5" fill="#374151">AUTO · MANUAL</text>
+<text x="550" y="700" font-size="12.5" fill="#374151">EXCEPTION · NO_ACTION</text>
+<text x="550" y="718" font-size="12.5" fill="#374151">GOV.2 sempre primeiro</text>
+<rect x="776" y="636" width="268" height="104" rx="10" fill="#ecf8f1" stroke="#2e9e62" stroke-width="1.6"/>
+<text x="790" y="660" font-size="14.5" font-weight="700" fill="#145233">02 · Remediate</text>
+<rect x="977" y="645" width="57" height="20" rx="10" fill="#2e9e62"/>
+<text x="1005.5" y="659" font-size="11" font-weight="700" fill="#ffffff" text-anchor="middle">DRY-RUN</text>
+<text x="790" y="682" font-size="12.5" fill="#374151">anexa só nas OUs alvo</text>
+<text x="790" y="700" font-size="12.5" fill="#374151">só políticas ManagedBy</text>
+<text x="790" y="718" font-size="12.5" fill="#374151">até 5 SCPs por OU · VERIFIED</text>
+<path d="M256,688 L296,688" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M496,688 L536,688" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M736,688 L776,688" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
+<rect x="56" y="762" width="440" height="56" rx="10" fill="#fff6e5" stroke="#d18a14" stroke-width="1.6"/>
+<text x="70" y="786" font-size="14.5" font-weight="700" fill="#6b4405">99 · Lab setup</text>
+<text x="70" y="808" font-size="12.5" fill="#374151">cria as OUs · --move-account · --simulate-drift · --destroy</text>
+<rect x="536" y="762" width="240" height="56" rx="10" fill="#e9f7f8" stroke="#2a9aa6" stroke-width="1.6"/>
+<text x="550" y="786" font-size="14.5" font-weight="700" fill="#114e55">config/governance_rules.yaml</text>
+<text x="550" y="808" font-size="12.5" fill="#374151">targets · exceções · regras</text>
+<path d="M656,762 L656,742" fill="none" stroke="#4b5563" stroke-width="1.8" marker-end="url(#ah)"/>
+<path d="M396,576 L396,636" fill="none" stroke="#3b6fd8" stroke-width="1.8" marker-end="url(#ah)"/>
+<rect x="365.5" y="583" width="61.0" height="18" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="396" y="596" font-size="12" fill="#1e3a7a" text-anchor="middle">lê tudo</text>
+<path d="M1044,700 L1058,700 L1058,343 L1046,343" fill="none" stroke="#2e9e62" stroke-width="1.8" marker-end="url(#ahg)"/>
+<rect x="903.0" y="581" width="103.0" height="18" rx="4" fill="#ffffff" fill-opacity="0.92"/>
+<text x="1000" y="594" font-size="12" fill="#145233" text-anchor="end">anexa (apply)</text>
+<text x="550" y="870" font-size="12.5" fill="#4b5563" text-anchor="middle">Política nova = um JSON em policies/ + uma regra com action: ensure_policy_attached no governance_rules.yaml</text>
 </svg>

@@ -73,6 +73,15 @@ def attached_policy_ids(org, target_id: str, policy_type: str) -> List[str]:
     return [p["Id"] for p in _paginate(org, "list_policies_for_target", "Policies", TargetId=target_id, Filter=policy_type)]
 
 
+def service_access(org) -> List[str]:
+    """Serviços com acesso confiável (trusted access) habilitado na organização."""
+    return [s["ServicePrincipal"] for s in _paginate(org, "list_aws_service_access_for_organization", "EnabledServicePrincipals")]
+
+
+def delegated_admins(org, service_principal: str) -> List[Dict[str, Any]]:
+    return _paginate(org, "list_delegated_administrators", "DelegatedAdministrators", ServicePrincipal=service_principal)
+
+
 def tags_for(org, resource_id: str) -> Dict[str, str]:
     tags = _paginate(org, "list_tags_for_resource", "Tags", ResourceId=resource_id)
     return {t["Key"]: t["Value"] for t in tags}

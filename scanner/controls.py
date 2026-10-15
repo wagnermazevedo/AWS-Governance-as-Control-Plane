@@ -1,4 +1,4 @@
-"""Avaliação dos controles de governança (GOV.1 a GOV.6).
+"""Avaliação dos controles de governança (GOV.1 a GOV.8).
 
 Cada função lê o estado real na AWS e devolve (status, verified_state).
 As mesmas funções são usadas pelo scan e pelo remediate, que confere o estado
@@ -112,19 +112,79 @@ def _error_detail(err: Exception) -> str:
     return str(err)
 
 
+CONFIG_PRINCIPALS = ("config.amazonaws.com", "config-multiaccountsetup.amazonaws.com")
+
+
+def check_config_org(org, config) -> Result:
+    """GOV.7: o AWS Config enxerga a organização inteira?
+
+    Passa se existir um agregador organizacional nesta conta ou um administrador
+    delegado do Config (o padrão com Control Tower é a conta Audit). O gravador da
+    própria conta de gerenciamento entra só como informação: o Control Tower não liga
+    o Config nela."""
+    state: Dict[str, Any] = {}
+    recorders = config.describe_configuration_recorder_status().get("ConfigurationRecordersStatus", [])
+    state["managementRecorderOn"] = any(r.get("recording") for r in recorders)
+    aggregators = config.describe_configuration_aggregators().get("ConfigurationAggregators", [])
+    state["orgAggregators"] = [a["ConfigurationAggregatorName"] for a in aggregators if a.get("OrganizationAggregationSource")]
+    enabled = orgapi.service_access(org)
+    state["trustedAccess"] = sorted(p for p in enabled if p in CONFIG_PRINCIPALS)
+    state["delegatedAdmins"] = sorted({a["Id"] for p in CONFIG_PRINCIPALS for a in orgapi.delegated_admins(org, p)})
+    if state["orgAggregators"] or state["delegatedAdmins"]:
+        state["reason"] = "OK"
+        return PASS, state
+    state["reason"] = "NO_ORG_AGGREGATOR" if state["trustedAccess"] else "NO_TRUSTED_ACCESS"
+    return FAIL, state
+
+
+def landing_zones(controltower) -> List[str]:
+    return [z["arn"] for z in controltower.list_landing_zones().get("landingZones", [])]
+
+
+def check_control_tower_ou(controltower, ou: Dict[str, Any], org) -> Result:
+    """GOV.8: a OU alvo tem controles do Control Tower habilitados?"""
+    controls: List[Dict[str, Any]] = []
+    for page in controltower.get_paginator("list_enabled_controls").paginate(targetIdentifier=ou["Arn"]):
+        controls.extend(page.get("enabledControls", []))
+    state = {
+        "enabledControls": len(controls),
+        "driftedControls": sum(1 for c in controls if (c.get("driftStatusSummary") or {}).get("driftStatus") == "DRIFTED"),
+        "scpsAttachedDirectly": len(orgapi.attached_policy_ids(org, ou["Id"], "SERVICE_CONTROL_POLICY")),
+    }
+    if not controls:
+        state["reason"] = "NO_CONTROLS"
+        return FAIL, state
+    state["reason"] = "CONTROLS_DRIFTED" if state["driftedControls"] else "OK"
+    return (FAIL if state["driftedControls"] else PASS), state
+
+
 def policy_controls(rules: Dict[str, Any]) -> List[str]:
     """Controles de política por OU: toda regra cuja ação é ensure_policy_attached
     (GOV.3, GOV.4, GOV.5 e qualquer controle novo que você adicionar no mapa)."""
     return sorted(c for c, r in rules.items() if (r or {}).get("action") == "ensure_policy_attached")
 
 
-def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
-    """Avalia todos os controles. Devolve (contexto da organização, itens)."""
+def _with_exception(item: Dict[str, Any], org, ou_id: str, exc_cfg: Dict[str, Any]) -> Dict[str, Any]:
+    tags = orgapi.tags_for(org, ou_id)
+    if exc_cfg.get("tag_key") in tags:
+        item["exception"] = {
+            "justification": tags.get(exc_cfg["tag_key"]),
+            "owner": tags.get(exc_cfg.get("owner_tag_key", "exception-owner")),
+        }
+    return item
+
+
+def evaluate(org, rules_doc: Dict[str, Any], clients: Dict[str, Any] = None) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+    """Avalia todos os controles. Devolve (contexto da organização, itens).
+
+    `clients` traz os clientes de config e controltower (GOV.7 e GOV.8). Sem eles,
+    esses dois controles ficam NOT_APPLICABLE."""
+    clients = clients or {}
     rules = rules_doc.get("rules", {}) or {}
     exc_cfg = rules_doc.get("exception", {}) or {}
     target_names = set((rules_doc.get("targets", {}) or {}).get("ou_names", []) or [])
     policy_ctrls = policy_controls(rules)
-    downstream = ["GOV.2", *policy_ctrls, "GOV.6"]
+    downstream = ["GOV.2", *policy_ctrls, "GOV.6", "GOV.7", "GOV.8"]
     items: List[Dict[str, Any]] = []
     context: Dict[str, Any] = {"organizationId": None, "managementAccountId": None, "rootId": None}
 
@@ -175,13 +235,7 @@ def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[
                         "name": ou["Name"], "path": ou["Path"]}
             try:
                 status, state = check_policy_attached(org, root, ou["Id"], params)
-                item = _item(control, rule, status, resource, state)
-                tags = orgapi.tags_for(org, ou["Id"])
-                if exc_cfg.get("tag_key") in tags:
-                    item["exception"] = {
-                        "justification": tags.get(exc_cfg["tag_key"]),
-                        "owner": tags.get(exc_cfg.get("owner_tag_key", "exception-owner")),
-                    }
+                item = _with_exception(_item(control, rule, status, resource, state), org, ou["Id"], exc_cfg)
             except ClientError as err:
                 item = _item(control, rule, ERROR, resource, {}, _error_detail(err))
             items.append(item)
@@ -202,5 +256,39 @@ def evaluate(org, rules_doc: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[
                                {"parent": root["Id"]}))
     except ClientError as err:
         items.append(_item("GOV.6", rule, ERROR, root_resource, {}, _error_detail(err)))
+
+    # GOV.7: AWS Config agregando a organização (camada detectiva).
+    rule = rules.get("GOV.7", {})
+    if "config" not in clients:
+        items.append(_item("GOV.7", rule, NOT_APPLICABLE, org_resource, {}, "Cliente do AWS Config não informado"))
+    else:
+        try:
+            status, state = check_config_org(org, clients["config"])
+            items.append(_item("GOV.7", rule, status, org_resource, state))
+        except ClientError as err:
+            items.append(_item("GOV.7", rule, ERROR, org_resource, {}, _error_detail(err)))
+
+    # GOV.8: Control Tower com controles nas OUs alvo (preventivo, detectivo e proativo).
+    rule = rules.get("GOV.8", {})
+    ct = clients.get("controltower")
+    try:
+        zones = landing_zones(ct) if ct else []
+    except ClientError as err:
+        zones = None
+        items.append(_item("GOV.8", rule, ERROR, org_resource, {}, _error_detail(err)))
+    if zones == []:
+        items.append(_item("GOV.8", rule, NOT_APPLICABLE, org_resource, {"landingZones": 0},
+                           "Sem Control Tower nesta região: as SCPs deste módulo fazem o papel preventivo"))
+    elif zones:
+        context["landingZone"] = zones[0]
+        for ou in ous:
+            resource = {"type": "AWS::Organizations::OrganizationalUnit", "id": ou["Id"],
+                        "name": ou["Name"], "path": ou["Path"]}
+            try:
+                status, state = check_control_tower_ou(ct, ou, org)
+                item = _with_exception(_item("GOV.8", rule, status, resource, state), org, ou["Id"], exc_cfg)
+            except ClientError as err:
+                item = _item("GOV.8", rule, ERROR, resource, {}, _error_detail(err))
+            items.append(item)
 
     return context, items
