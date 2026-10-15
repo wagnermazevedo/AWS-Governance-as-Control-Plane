@@ -1,134 +1,101 @@
+#!/usr/bin/env python3
+"""[02] REMEDIATE: executa os itens AUTO do plano. Dry-run é o padrão.
+
+Cada ação confere o estado ao vivo antes de agir (o plano pode estar velho)
+e depois de agir (VERIFIED). Itens MANUAL e EXCEPTION são registrados, nunca tocados.
+
+Saída: <output-dir>/<timestamp>/governance_remediation_results.{json,csv} e summary.md.
+(Não grava YAML de propósito: o test-control-plane.sh procura o YAML de scan mais recente.)
+"""
+
 import argparse
 import os
-import yaml
-from datetime import datetime, timezone
-import boto3
 
+import _bootstrap  # noqa: F401
 
-# =============================================================================
-# Handlers de Governança (Boto3)
-# =============================================================================
+from lib import API_VERSION
+from remediate import REGISTRY
+from lib.aws import client, session
+from lib.io import load_yaml, markdown_table, new_run_dir, utc_timestamp, write_csv, write_json, write_text
 
-def handler_enable_ebs_encryption_default(ec2_client, dry_run: bool) -> tuple[bool, str]:
-    if dry_run:
-        return True, "DRY-RUN: Habilitaria criptografia default de EBS na região"
-    
-    try:
-        ec2_client.enable_ebs_encryption_by_default()
-        return True, "OK: Criptografia default de EBS ativada na região com sucesso"
-    except Exception as e:
-        return False, f"ERROR: Falha ao ativar criptografia EBS: {str(e)}"
+CSV_FIELDS = ["itemId", "control", "decision", "action", "resource", "ok", "message"]
 
-
-def handler_apply_resource_tags(tagging_client, params: dict, dry_run: bool) -> tuple[bool, str]:
-    tags = params.get("tags", {})
-    if not tags:
-        return False, "PARAM_ERROR: Nenhuma tag fornecida nos parâmetros"
-
-    if dry_run:
-        return True, f"DRY-RUN: Aplicaria as tags de governança {tags} nos recursos não-conformes"
-
-    # Exemplo simulado/seguro para gravação de demonstração
-    return True, f"OK: Tags de governança {tags} aplicadas aos recursos não-conformes"
-
-
-# =============================================================================
-# Dispatcher
-# =============================================================================
-
-def execute_governance_action(action_name: str, params: dict, clients: dict, dry_run: bool) -> tuple[bool, str]:
-    if action_name == "enable_ebs_encryption_default":
-        return handler_enable_ebs_encryption_default(clients["ec2"], dry_run)
-    
-    if action_name == "apply_resource_tags":
-        return handler_apply_resource_tags(clients["tagging"], params, dry_run)
-
-    return False, f"UNSUPPORTED_ACTION: {action_name}"
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="AWS Governance Remediator")
+    parser = argparse.ArgumentParser(description="AWS Governance Remediate")
     parser.add_argument("--region", required=True)
-    parser.add_argument("--yaml", required=True, help="Caminho do plano gerado (remediation_plan.yaml)")
+    parser.add_argument("--profile", default=None)
+    parser.add_argument("--yaml", required=True, help="Plano gerado pelo 01_governance_plan.py")
     parser.add_argument("--mode", choices=["dry-run", "apply"], default="dry-run")
     parser.add_argument("--output-dir", default="outputs")
     args = parser.parse_args()
 
-    dry_run = (args.mode == "dry-run")
+    plan = load_yaml(args.yaml)
+    if plan.get("kind") != "GovernanceRemediationPlan":
+        raise SystemExit(f"[ERRO] {args.yaml} não é um plano (kind={plan.get('kind')}). Rode o 01_governance_plan.py")
 
-    with open(args.yaml, "r", encoding="utf-8") as f:
-        doc = yaml.safe_load(f) or {}
+    dry_run = args.mode == "dry-run"
+    org = client(session(args.profile, args.region), "organizations")
+    sim = {}  # estado simulado compartilhado entre ações da mesma execução
 
-    clients = {
-        "ec2": boto3.client("ec2", region_name=args.region),
-        "tagging": boto3.client("resourcegroupstaggingapi", region_name=args.region)
-    }
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    items = (doc.get("spec", {}) or {}).get("items", []) or []
-
-    results = {
-        "apiVersion": "governance.shcp/v1",
-        "kind": "GovernanceRemediationResults",
-        "metadata": {
-            "executedAt": timestamp,
-            "region": args.region,
-            "mode": args.mode,
-            "sourcePlan": args.yaml
-        },
-        "spec": {
-            "summary": {"total": len(items), "executed": 0, "succeeded": 0, "failed": 0, "manual_required": 0},
-            "results": []
-        }
-    }
+    items = (plan.get("spec") or {}).get("items", []) or []
+    summary = {"total": len(items), "executed": 0, "succeeded": 0, "failed": 0, "manual": 0, "exception": 0, "noAction": 0}
+    results = []
 
     for item in items:
-        item_id = item.get("id")
-        decision = item.get("decision", {}) or {}
-        decision_type = decision.get("type", "MANUAL")
-        action = item.get("action", {}) or {}
+        decision = (item.get("decision") or {}).get("type", "MANUAL")
+        action = item.get("action") or {}
         action_name = action.get("name", "manual")
-        action_params = action.get("params", {}) or {}
+        resource = item.get("resource") or {}
+        entry = {"itemId": item.get("id"), "control": item.get("control"), "decision": decision,
+                 "action": action_name, "resource": resource.get("path") or resource.get("name") or resource.get("id")}
 
-        if decision_type == "AUTO" and action_name != "manual":
-            results["spec"]["summary"]["executed"] += 1
-            ok, msg = execute_governance_action(action_name, action_params, clients, dry_run)
-            
-            if ok:
-                results["spec"]["summary"]["succeeded"] += 1
+        if decision == "AUTO":
+            handler = REGISTRY.get(action_name)
+            summary["executed"] += 1
+            if not handler:
+                outcome = {"ok": False, "message": f"UNSUPPORTED_ACTION: {action_name}", "changes": []}
             else:
-                results["spec"]["summary"]["failed"] += 1
+                try:
+                    outcome = handler(org, item, action.get("params") or {}, sim, dry_run)
+                except Exception as err:  # registra e segue: um item quebrado não para os outros
+                    outcome = {"ok": False, "message": f"ERROR: {err}", "changes": []}
+            summary["succeeded" if outcome["ok"] else "failed"] += 1
+            entry.update(ok=outcome["ok"], message=outcome["message"], changes=outcome.get("changes", []))
+        elif decision == "EXCEPTION":
+            summary["exception"] += 1
+            entry.update(ok=True, message="EXCEPTION: " + (item.get("decision") or {}).get("reason", ""))
+        elif decision == "NO_ACTION":
+            summary["noAction"] += 1
+            entry.update(ok=True, message="NO_ACTION")
         else:
-            ok = False
-            msg = "MANUAL_REQUIRED: Item mantido para revisão humana"
-            results["spec"]["summary"]["manual_required"] += 1
+            summary["manual"] += 1
+            entry.update(ok=False, message="MANUAL_REQUIRED: " + (item.get("decision") or {}).get("reason", ""))
+        results.append(entry)
 
-        results["spec"]["results"].append({
-            "itemId": item_id,
-            "decision": decision_type,
-            "action": action_name,
-            "ok": ok,
-            "message": msg
-        })
+    timestamp = utc_timestamp()
+    out = {
+        "apiVersion": API_VERSION,
+        "kind": "GovernanceRemediationResults",
+        "metadata": {"executedAt": timestamp, "region": args.region, "mode": args.mode, "sourcePlan": os.path.abspath(args.yaml)},
+        "spec": {"summary": summary, "results": results},
+    }
+    out_dir = new_run_dir(args.output_dir, timestamp)
+    write_json(os.path.join(out_dir, "governance_remediation_results.json"), out)
+    write_csv(os.path.join(out_dir, "governance_remediation_results.csv"), results, CSV_FIELDS)
+    visible = [r for r in results if r["decision"] != "NO_ACTION"]
+    write_text(os.path.join(out_dir, "summary.md"),
+               f"# Governance Remediate · {args.mode.upper()} · {timestamp}\n\n"
+               + "\n".join(f"- {k}: {v}" for k, v in summary.items()) + "\n\n"
+               + markdown_table(visible, ["control", "decision", "resource", "ok", "message"]))
 
-    out_dir = os.path.join(args.output_dir, timestamp)
-    os.makedirs(out_dir, exist_ok=True)
-    out_path = os.path.join(out_dir, "governance_remediation_results.yaml")
-
-    with open(out_path, "w", encoding="utf-8") as f:
-        yaml.safe_dump(results, f, sort_keys=False, allow_unicode=True)
-
-    summary = results["spec"]["summary"]
-    print(f"[OK] Remediação de Governança finalizada ({args.mode.upper()}): {out_path}")
-    print(f" - Total : {summary['total']}")
-    print(f" - Executados : {summary['executed']}")
-    print(f" - Sucesso : {summary['succeeded']}")
-    print(f" - Falhas : {summary['failed']}")
-    print(f" - Requer Manual: {summary['manual_required']}")
+    print(f"[OK] Remediação de Governança finalizada ({args.mode.upper()}): {out_dir}")
+    for key, value in summary.items():
+        print(f" - {key:<10}: {value}")
+    for r in visible:
+        print(f"   {r['control']:<6} {r['decision']:<10} {str(r['resource']):<28} {r['message']}")
+    if summary["failed"]:
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":

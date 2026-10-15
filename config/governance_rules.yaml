@@ -1,13 +1,78 @@
 apiVersion: governance.shcp/v1
 kind: GovernanceRuleMap
+
+# Mapa declarativo de governança: para cada controle, o destino já está
+# decidido antes do finding aparecer (AUTO, MANUAL ou EXCEPTION).
+
+# OUs que este módulo governa. Por segurança, o padrão são apenas as OUs do
+# laboratório (lab_insecure/). Para governar outras OUs, adicione os nomes aqui.
+targets:
+  ou_names:
+    - SCP-Lab
+    - SCP-Lab-Exception
+
+# Uma OU com esta tag não é corrigida, mas também não é ignorada: vira
+# EXCEPTION no plano, com justificativa (valor da tag) e dono (tag de dono).
+# Exceção sem dono volta para MANUAL.
+exception:
+  tag_key: scp-exception
+  owner_tag_key: exception-owner
+
 rules:
-  - name: "S3 Server-Side Encryption Enforcement"
-    match_contains:
-      - "s3-bucket-server-side-encryption-enabled"
-      - "server-side-encryption"
-    action: "apply_resource_tags"
+  GOV.1:
+    title: "Organization com todas as features habilitadas"
+    decision: MANUAL
+    reason: "Migrar de consolidated billing para all features exige aceite de cada conta-membro"
+    mitre: []
+
+  GOV.2:
+    title: "Service Control Policies habilitadas na raiz"
+    decision: AUTO
+    action: enable_policy_type
     params:
-      tags:
-        GovernanceStatus: "NonCompliant-Encryption"
-        RemediationAction: "Enforce-SSE-S3"
-    note: "Marca recursos e aciona compliance de criptografia default"
+      policy_type: SERVICE_CONTROL_POLICY
+    mitre: []
+
+  GOV.3:
+    title: "SCP baseline anexada (não sair da org, proteger serviços de segurança, bloquear root)"
+    decision: AUTO
+    action: ensure_policy_attached
+    params:
+      policy_type: SERVICE_CONTROL_POLICY
+      policy_name: scp-gov-baseline
+      policy_file: policies/scp-gov-baseline.json
+    mitre:
+      - T1666      # Modify Cloud Resource Hierarchy
+      - T1562.008  # Impair Defenses: Disable or Modify Cloud Logs
+      - T1078.004  # Valid Accounts: Cloud Accounts
+
+  GOV.4:
+    title: "SCP de restrição de regiões anexada"
+    decision: AUTO
+    action: ensure_policy_attached
+    params:
+      policy_type: SERVICE_CONTROL_POLICY
+      policy_name: scp-gov-region-guardrail
+      policy_file: policies/scp-gov-region-guardrail.json
+      allowed_regions:
+        - us-east-1
+        - sa-east-1
+    mitre:
+      - T1535      # Unused/Unsupported Cloud Regions
+
+  GOV.5:
+    title: "Tag policy de padronização (Environment, Owner, CostCenter) anexada"
+    decision: AUTO
+    action: ensure_policy_attached
+    params:
+      policy_type: TAG_POLICY
+      policy_name: tag-gov-required-tags
+      policy_file: policies/tag-gov-required-tags.json
+      enable_type_if_needed: true
+    mitre: []
+
+  GOV.6:
+    title: "Contas-membro diretamente na raiz, fora de uma OU"
+    decision: MANUAL
+    reason: "Mover conta de OU muda as políticas herdadas; é decisão de arquitetura, não de script"
+    mitre: []

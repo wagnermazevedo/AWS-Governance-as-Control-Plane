@@ -1,0 +1,43 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Laboratório inseguro do AWS Governance as Control Plane. Cria duas OUs sem
+  nenhuma SCP ou tag policy anexada. Use SOMENTE numa organização de testes.
+
+Parameters:
+  RootId:
+    Type: String
+    AllowedPattern: "^r-[0-9a-z]{4,32}$"
+    Description: ID da raiz da organização (aws organizations list-roots)
+
+Resources:
+  # OU governada: o scan deve reprovar GOV.3, GOV.4 e GOV.5 aqui.
+  ScpLabOU:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: SCP-Lab
+      ParentId: !Ref RootId
+      Tags:
+        - Key: Environment
+          Value: lab
+        - Key: Owner
+          Value: security-control-plane
+
+  # OU com exceção documentada: deve virar EXCEPTION no plano, não remediação.
+  ScpLabExceptionOU:
+    Type: AWS::Organizations::OrganizationalUnit
+    Properties:
+      Name: SCP-Lab-Exception
+      ParentId: !Ref RootId
+      Tags:
+        - Key: Environment
+          Value: lab
+        - Key: scp-exception
+          Value: "Sandbox de migracao ate 2026-12-31"
+        - Key: exception-owner
+          Value: cloud-platform-team
+
+Outputs:
+  ScpLabOUId:
+    Value: !Ref ScpLabOU
+  ScpLabExceptionOUId:
+    Value: !Ref ScpLabExceptionOU
