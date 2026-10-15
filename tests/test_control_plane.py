@@ -91,7 +91,8 @@ class PolicyFiles(unittest.TestCase):
     def test_policies_fit_size_limits(self):
         for f, t in [("policies/scp-gov-baseline.json", "SERVICE_CONTROL_POLICY"),
                      ("policies/scp-gov-region-guardrail.json", "SERVICE_CONTROL_POLICY"),
-                     ("policies/tag-gov-required-tags.json", "TAG_POLICY")]:
+                     ("policies/tag-gov-required-tags.json", "TAG_POLICY"),
+                     ("policies/examples/rcp-gov-s3-org-only.json", "RESOURCE_CONTROL_POLICY")]:
             doc = load_policy(f)
             check_size(doc, t)
             self.assertLessEqual(len(compact(doc)), SIZE_LIMITS[t])
@@ -223,15 +224,9 @@ class NewPolicyControl(unittest.TestCase):
         from remediate import REGISTRY
         from scanner.controls import evaluate
 
-        rcp = {"Version": "2012-10-17", "Statement": [{
-            "Sid": "DenyS3OutsideOrg", "Effect": "Deny", "Principal": "*", "Action": "s3:*", "Resource": "*",
-            "Condition": {"StringNotEqualsIfExists": {"aws:PrincipalOrgID": "o-exemplo"},
-                          "BoolIfExists": {"aws:PrincipalIsAWSService": "false"}}}]}
-        with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
-            json.dump(rcp, f)
         rules_doc = load_yaml(RULES)
         params = {"policy_type": "RESOURCE_CONTROL_POLICY", "policy_name": "rcp-gov-s3-org-only",
-                  "policy_file": f.name, "enable_type_if_needed": True}
+                  "policy_file": "policies/examples/rcp-gov-s3-org-only.json", "enable_type_if_needed": True}
         rules_doc["rules"]["GOV.9"] = {"title": "RCP: S3 só para identidades da organização", "decision": "AUTO",
                                        "action": "ensure_policy_attached", "params": params}
 
@@ -246,7 +241,6 @@ class NewPolicyControl(unittest.TestCase):
         self.assertIn("VERIFIED", outcome["message"])
         _, items = evaluate(org, rules_doc)
         self.assertEqual(by_control(items, "GOV.9", "SCP-Lab")[0]["status"], "PASS")
-        os.remove(f.name)
 
 
 class ConfigAndControlTower(unittest.TestCase):

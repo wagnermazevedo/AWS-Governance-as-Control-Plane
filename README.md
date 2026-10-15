@@ -139,7 +139,7 @@ Devolve a conta movida para a raiz, apaga só as políticas deste módulo (e só
 
 A boa notícia: para políticas, você não precisa escrever código. Usando como exemplo um **GOV.9** com uma Resource Control Policy que só deixa identidades da organização acessarem os buckets S3:
 
-1. **Escreva a política.** Crie `policies/rcp-gov-s3-org-only.json` com o JSON da política.
+1. **Escreva a política.** Copie o modelo `policies/examples/rcp-gov-s3-org-only.json` para `policies/` e troque o `o-exemplo` pelo ID da sua organização.
 2. **Declare no mapa.** Em `config/governance_rules.yaml`, adicione:
 
    ```yaml
@@ -152,11 +152,15 @@ A boa notícia: para políticas, você não precisa escrever código. Usando com
        policy_name: rcp-gov-s3-org-only
        policy_file: policies/rcp-gov-s3-org-only.json
        enable_type_if_needed: true
-     mitre: []
+     mitre:
+       - T1530      # Data from Cloud Storage
    ```
 
 3. **Pronto.** Toda regra com `action: ensure_policy_attached` é avaliada em cada OU alvo pelo scan e aplicada pelo remediate, com as mesmas travas: drift, dono da política, exceção e limite de tamanho. O `enable_type_if_needed` habilita o tipo de política na raiz se ainda estiver desligado.
 4. **Teste.** Adicione o arquivo na lista de `test_policies_fit_size_limits`, em `tests/test_control_plane.py`, e rode os testes. O teste `NewPolicyControl` mostra esse mesmo exemplo funcionando.
+5. **Rode o ciclo e comprove.** Scan, plan, dry-run e apply. Depois tente ler um bucket da SCP-Lab de fora da organização: AccessDenied.
+
+O passo a passo completo, com comandos e o teste de acesso, está em [docs/nova-policy-gov9.md](docs/nova-policy-gov9.md).
 
 Quer um controle que **não** é "anexar uma política" (por exemplo, checar um administrador delegado)? Aí você escreve a verificação em `scanner/controls.py` e, se for AUTO, uma ação nova em `remediate/` registrada no `remediate/__init__.py`.
 
@@ -197,7 +201,7 @@ AWS-Governance-as-Control-Plane/
 │   ├── 02_governance_remediate.py # Age
 │   └── 99_governance_lab_setup.py # Monta, simula drift e desmonta o laboratório
 ├── config/governance_rules.yaml   # O cérebro: o destino de cada controle
-├── policies/                      # SCPs e tag policy versionadas (a fonte da verdade)
+├── policies/                      # SCPs e tag policy versionadas (a fonte da verdade); examples/ traz modelos, como a RCP do GOV.9
 ├── scanner/                       # Leitura da organização e avaliação dos controles
 ├── remediate/                     # Uma correção pequena por tipo de ação
 ├── lab_insecure/                  # CloudFormation das OUs do laboratório
@@ -205,7 +209,7 @@ AWS-Governance-as-Control-Plane/
 ├── lib/                           # Clientes AWS, saídas e políticas
 ├── reports/                       # Relatórios consolidados
 ├── outputs/                       # Saídas de cada execução
-└── docs/                          # Arquitetura, controles e topologia
+└── docs/                          # Arquitetura, controles, topologia e o passo a passo de uma policy nova
 ```
 
 ### Desafio da semana
@@ -246,7 +250,7 @@ python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py --d
 
 ### Adding a new policy
 
-No code needed: drop the JSON in `policies/` and add a rule with `action: ensure_policy_attached` (with `policy_type`, `policy_name`, `policy_file` and optionally `enable_type_if_needed`) to `config/governance_rules.yaml`. The scan evaluates it on every target OU and the remediate applies it with the same safety rails. See the `NewPolicyControl` test for a working GOV.9 RCP example.
+No code needed: drop the JSON in `policies/` and add a rule with `action: ensure_policy_attached` (with `policy_type`, `policy_name`, `policy_file` and optionally `enable_type_if_needed`) to `config/governance_rules.yaml`. The scan evaluates it on every target OU and the remediate applies it with the same safety rails. A ready-to-use GOV.9 RCP template lives in `policies/examples/rcp-gov-s3-org-only.json` (replace `o-exemplo` with your org ID), the `NewPolicyControl` test shows it working, and [docs/nova-policy-gov9.md](docs/nova-policy-gov9.md) has the full step by step.
 
 ### Outputs and tests
 
