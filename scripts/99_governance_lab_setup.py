@@ -6,6 +6,7 @@ Rode na conta de GERENCIAMENTO da organização de testes.
   python3 scripts/99_governance_lab_setup.py                              # cria as OUs SCP-Lab e SCP-Lab-Exception
   python3 scripts/99_governance_lab_setup.py --move-account 111122223333  # e move uma conta-membro de testes para a SCP-Lab
   python3 scripts/99_governance_lab_setup.py --simulate-drift             # tira a proteção do CloudTrail da SCP baseline
+  python3 scripts/99_governance_lab_setup.py --list                       # mostra (só leitura) o que o laboratório montou
   python3 scripts/99_governance_lab_setup.py --destroy                    # desfaz tudo
 
 O --destroy devolve a conta movida para a raiz, desanexa e apaga só as políticas com a tag
@@ -185,6 +186,68 @@ def destroy_config_rules(config):
                 raise
 
 
+def lab_list(org, cfn, config, stack):
+    """Só leitura: explica na tela o que o laboratório montou, sem tocar em nada.
+    Mostra as OUs do lab, a conta de teste movida, as políticas do módulo (e onde
+    estão anexadas) e as 2 managed rules do Config."""
+    info = orgapi.describe_organization(org)
+    print(f"Organização {mask.mask_text(info['Id'])} · conta de gerenciamento {mask.mask_text(info['MasterAccountId'])}")
+
+    print(f"\n=== OUs do laboratório (stack {stack}) ===")
+    outputs = stack_outputs(cfn, stack)
+    lab_ou_ids = set(outputs.values())
+    if not outputs:
+        print("[—] A stack do laboratório não existe. Rode o setup (sem flags) para montar o lab.")
+    else:
+        friendly = {"ScpLabOUId": "SCP-Lab", "ScpLabExceptionOUId": "SCP-Lab-Exception"}
+        for key, ou_id in outputs.items():
+            print(f"   [OK] {friendly.get(key, key):<18} {mask.mask_text(ou_id)}")
+
+    print("\n=== Conta de teste movida pelo lab ===")
+    moved = _load_state().get("movedAccount")
+    if moved:
+        print(f"   [OK] {mask.mask_text(moved['accountId'])} está na SCP-Lab (o --destroy devolve para a raiz)")
+    else:
+        print("   [—] Nenhuma conta movida pelo lab (--move-account).")
+
+    print("\n=== Políticas do módulo (tag ManagedBy) ===")
+    found_any = False
+    for policy_type in POLICY_TYPES:
+        try:
+            policies = org.list_policies(Filter=policy_type)["Policies"]
+        except ClientError as err:
+            if _code(err) == "PolicyTypeNotEnabledException":
+                print(f"   [—] Tipo {policy_type} ainda não habilitado.")
+                continue
+            raise
+        learn_policy_ids(*(p["Id"] for p in policies))
+        for policy in policies:
+            if orgapi.tags_for(org, policy["Id"]).get(MANAGED_TAG_KEY) != MANAGED_TAG_VALUE:
+                continue
+            found_any = True
+            targets = org.list_targets_for_policy(PolicyId=policy["Id"])["Targets"]
+            attached = [mask.mask_text(t["TargetId"]) for t in targets if t["TargetId"] in lab_ou_ids]
+            where = ", ".join(attached) if attached else "criada, mas não anexada nas OUs do lab"
+            print(f"   [OK] {policy['Name']:<26} ({policy_type}) → {where}")
+    if not found_any:
+        print("   [—] Nenhuma política do módulo criada ainda. Quem cria as SCPs e a tag policy é o remediate (02) no modo apply.")
+
+    print("\n=== Managed rules do AWS Config (camada detectiva do lab) ===")
+    for r in CONFIG_RULES:
+        try:
+            config.describe_config_rules(ConfigRuleNames=[r["name"]])
+            print(f"   [OK] {r['name']:<28} → {r['relates']}")
+        except ClientError as err:
+            if _code(err) == "NoSuchConfigRuleException":
+                print(f"   [—] {r['name']:<28} ausente ({r['relates']}) — precisa do Config gravando (Control Tower liga)")
+            else:
+                raise
+
+    print("\nResumo: o lab cria as OUs (CloudFormation) e as managed rules do Config. "
+          "As SCPs e a tag policy são criadas pelo remediate (02). O Control Tower, a "
+          "landing zone, o Config e o Account Factory são montados no console, fora do lab.")
+
+
 def main():
     mask.setup(keep_prefixes=LAB_PREFIXES)  # modo gravação: antes do argparse, para aceitar --no-mask
     parser = argparse.ArgumentParser(description="Governance Lab Setup (organização de testes)")
@@ -193,6 +256,8 @@ def main():
     parser.add_argument("--stack-name", default="governance-control-plane-lab")
     parser.add_argument("--move-account", default=None, help="Conta-membro DE TESTES a mover para a SCP-Lab")
     parser.add_argument("--simulate-drift", action="store_true")
+    parser.add_argument("--list", "--lists", dest="list", action="store_true",
+                        help="Só leitura: mostra o que o laboratório montou")
     parser.add_argument("--destroy", action="store_true")
     parser.add_argument("--yes", action="store_true", help="Não pede confirmação")
     args = parser.parse_args()
@@ -202,6 +267,9 @@ def main():
     cfn = client(sess, "cloudformation")
     config = client(sess, "config")
 
+    if args.list:
+        lab_list(org, cfn, config, args.stack_name)
+        return
     if args.destroy:
         destroy(org, cfn, args.stack_name)
         destroy_config_rules(config)
