@@ -27,15 +27,19 @@ No episódio anterior, o Security Hub mostrou o que já estava errado e a gente 
 
 ### Antes de começar: como as três camadas se encaixam
 
-O **Control Tower** organiza a casa: cria a landing zone (com as contas de Log Archive e Audit), registra as OUs e oferece controles de três tipos. Os **preventivos** viram SCPs, os **detectivos** viram regras do AWS Config, e os **proativos** viram hooks do CloudFormation, que barram o recurso antes de ele nascer.
+O **Control Tower** organiza a casa: cria a landing zone (com as contas de Log Archive e Audit), registra as OUs e oferece controles de três tipos. Os **preventivos** viram SCPs, os **detectivos** viram regras do AWS Config, e os **proativos** viram hooks do CloudFormation, que barram o recurso antes de ele nascer. Ele também traz o **Account Factory**, a fábrica de contas: cada conta nova é criada **já dentro da OU certa**, com os guardrails ligados desde o começo, em vez de alguém criar a conta na mão e depois lembrar de movê-la — o descuido que o **GOV.6** justamente aponta.
+
+> **O Control Tower é opcional neste módulo.** Sem ele, o GOV.8 fica `NOT_APPLICABLE` e as SCPs fazem o papel preventivo sozinhas — é o cenário de quem está no **AWS Organizations puro**. A padronização de contas novas, aí, fica por sua conta: criar pela API do Organizations e mover para a OU certa (é a disciplina que o GOV.6 cobra). O **Account Factory** é o próximo degrau, quando você adotar o Control Tower.
 
 O **AWS Config** é a memória da configuração. Ele grava cada mudança e avalia regras, e é ele que está por trás dos controles do Security Hub do episódio anterior. Com um agregador na conta de auditoria, você enxerga a organização inteira num lugar só.
 
 As **SCPs** são o teto. Este módulo usa as próprias SCPs, versionadas em `policies/`, e convive com o Control Tower: ele só mexe em políticas com a tag dele, nunca nas do Control Tower.
 
+E os **permission sets** do IAM Identity Center? Eles dão o acesso às contas, e a SCP é o teto deles também. Este módulo não cria nem altera permission sets: quem recebe qual acesso, em qual conta, é tema do episódio 5, **IAM & Identity as Control Plane**.
+
 ### O que é uma SCP, afinal?
 
-Uma SCP **não dá permissão a ninguém**. Ela define o teto: mesmo que uma role tenha `AdministratorAccess`, ela não consegue fazer o que a SCP nega. Isso vale até para o usuário root das contas-membro.
+Uma SCP **não dá permissão a ninguém**. Ela define o teto: mesmo que uma role ou um permission set tenha `AdministratorAccess`, ele não consegue fazer o que a SCP nega. Isso vale até para o usuário root das contas-membro.
 
 Só tem uma exceção importante: a SCP **não se aplica à conta de gerenciamento**. Por isso a boa prática é não rodar nenhum workload nela. Lá mora só a governança.
 
@@ -81,7 +85,7 @@ Rode na conta de **gerenciamento** de uma organização de testes.
 ```bash
 cd ~
 git clone https://github.com/wagnermazevedo/AWS-Governance-as-Control-Plane.git
-pip3 install --user -r ~/AWS-Governance-as-Control-Plane/requirements.txt
+pip3 install -r ~/AWS-Governance-as-Control-Plane/requirements.txt
 ```
 
 **2. Monte o laboratório**
@@ -175,6 +179,20 @@ Cada execução cria uma pasta nova em `outputs/<timestamp>/`, e nada é sobresc
 
 O remediate registra cada chamada de API que fez (`changes`). Se um auditor perguntar quem mudou a política e quando, a resposta está ali. Ele grava JSON, CSV e Markdown, mas não YAML, para o `test-control-plane.sh` continuar achando o YAML do scan mais recente.
 
+### Gravando ou compartilhando a tela? Modo gravação
+
+O modo gravação vem **ligado por padrão**. No terminal, no `summary.md` e nos CSVs, número de conta, IDs da organização, da raiz e das OUs, ARNs, e-mails, IDs de política e nomes de contas e de OUs fora do laboratório viram apelidos. **A conta e a organização ficam visivelmente mascaradas, terminando em `XXXX`** (por exemplo, `47130982XXXX` no lugar da conta e `o-9f3a21bcXXXX` no lugar da organização); os demais viram apelidos estáveis como `ou-1a2b-3c4d5e6f` ou `nome-8ad717`. Os nomes do laboratório continuam legíveis (`SCP-Lab`, `SCP-Lab-Exception` e as políticas `scp-gov-*`, `tag-gov-*` e `rcp-gov-*`), então dá para acompanhar a demo sem expor a sua organização.
+
+- **YAML e JSON ficam com os valores reais**, porque o plan e o remediate precisam deles para agir. Não abra esses arquivos na gravação.
+- **Quer ver tudo real?** Passe `--no-mask` em qualquer script (ou exporte `SCP_MASK=0`). Use também para gerar o CSV que vai para o Athena.
+- **Os apelidos são estáveis:** a mesma conta vira sempre o mesmo apelido, graças à chave em `outputs/.mask-key`. Ela já está no `.gitignore`: nunca faça commit dela.
+
+```bash
+cd ~
+python3 ~/AWS-Governance-as-Control-Plane/scripts/00_governance_scan.py --region us-east-1             # mascarado
+python3 ~/AWS-Governance-as-Control-Plane/scripts/00_governance_scan.py --region us-east-1 --no-mask   # valores reais
+```
+
 ### Permissões necessárias
 
 - **Scan:** `organizations:Describe*`, `organizations:List*`, `config:DescribeConfigurationRecorderStatus`, `config:DescribeConfigurationAggregators`, `controltower:ListLandingZones`, `controltower:ListEnabledControls`, `sts:GetCallerIdentity`
@@ -188,7 +206,7 @@ O remediate registra cada chamada de API que fez (`changes`). Se um auditor perg
 python3 -m unittest discover -s ~/AWS-Governance-as-Control-Plane/tests -v
 ```
 
-Os testes rodam numa organização simulada, sem precisar de AWS, e validam cada chamada contra o modelo oficial da API do botocore. Eles cobrem o scan sem escrita, o dry-run sem escrita, as decisões do plano, exceções sem dono, drift, a recusa em mexer em política de outro dono, uma política nova adicionada só pelo mapa, e o setup e destroy do laboratório.
+Os testes rodam numa organização simulada, sem precisar de AWS, e validam cada chamada contra o modelo oficial da API do botocore. Eles cobrem o scan sem escrita, o dry-run sem escrita, as decisões do plano, exceções sem dono, drift, a recusa em mexer em política de outro dono, uma política nova adicionada só pelo mapa, o setup e destroy do laboratório, e o modo gravação.
 
 ### Onde fica cada coisa
 
@@ -206,7 +224,7 @@ AWS-Governance-as-Control-Plane/
 ├── remediate/                     # Uma correção pequena por tipo de ação
 ├── lab_insecure/                  # CloudFormation das OUs do laboratório
 ├── tests/                         # Testes offline
-├── lib/                           # Clientes AWS, saídas e políticas
+├── lib/                           # Clientes AWS, saídas, políticas e o modo gravação (mask.py)
 ├── reports/                       # Relatórios consolidados
 ├── outputs/                       # Saídas de cada execução
 └── docs/                          # Arquitetura, controles, topologia e o passo a passo de uma policy nova
@@ -222,13 +240,15 @@ Escreva o GOV.9! Siga o passo a passo acima, adapte a RCP para a sua organizaç�
 
 In the previous episode, Security Hub showed what was already wrong and we fixed it. What if we could prevent the problem **before** it happens?
 
-That is what this repository is about. Governance here has three layers on top of AWS Organizations: **AWS Control Tower** (landing zone and a catalog of preventive, detective and proactive controls), **AWS Config** (records and evaluates every resource configuration across accounts) and **Service Control Policies** plus tag policies (**organization-wide limits**, written as code and versioned right here). The module ships its own SCPs and coexists with Control Tower: it only touches policies tagged as its own.
+That is what this repository is about. Governance here has three layers on top of AWS Organizations: **AWS Control Tower** (landing zone, a catalog of preventive, detective and proactive controls, and **Account Factory**, which vends every new account straight into the right OU with guardrails on from day one), **AWS Config** (records and evaluates every resource configuration across accounts) and **Service Control Policies** plus tag policies (**organization-wide limits**, written as code and versioned right here). The module ships its own SCPs and coexists with Control Tower: it only touches policies tagged as its own.
+
+> **Control Tower is optional here.** Without it, GOV.8 reports `NOT_APPLICABLE` and the SCPs do the preventive job on their own — the plain **AWS Organizations** case. Standardizing new accounts is then on you (create via the Organizations API and move to the right OU, the discipline GOV.6 flags); Account Factory is the next step once you adopt Control Tower.
 
 > Part of the **AWS Security Control Plane** series, created from the [AWS Security Control Plane Scripts](https://github.com/wagnermazevedo/AWS-Security-Control-Plane-Scripts) template.
 >
 > ⚠️ **Use a test organization.** This module creates and attaches SCPs.
 
-**Quick reminder:** an SCP never grants permissions, it sets the ceiling. It applies even to member-account root users, but not to the management account.
+**Quick reminder:** an SCP never grants permissions, it sets the ceiling. It applies even to member-account root users and to any IAM Identity Center permission set, but not to the management account. Permission sets themselves (who gets which access, in which account) are covered in episode 5, IAM & Identity; this module never creates or changes them.
 
 ### Controls
 
@@ -242,7 +262,7 @@ Policies are attached only to OUs listed in `targets.ou_names` (never the root);
 
 ```bash
 cd ~ && git clone https://github.com/wagnermazevedo/AWS-Governance-as-Control-Plane.git
-pip3 install --user -r ~/AWS-Governance-as-Control-Plane/requirements.txt
+pip3 install -r ~/AWS-Governance-as-Control-Plane/requirements.txt
 python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py                 # build the lab OUs
 ~/AWS-Governance-as-Control-Plane/test-control-plane.sh AWS-Governance-as-Control-Plane dry-run
 python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py --destroy       # clean up
@@ -251,6 +271,15 @@ python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py --d
 ### Adding a new policy
 
 No code needed: drop the JSON in `policies/` and add a rule with `action: ensure_policy_attached` (with `policy_type`, `policy_name`, `policy_file` and optionally `enable_type_if_needed`) to `config/governance_rules.yaml`. The scan evaluates it on every target OU and the remediate applies it with the same safety rails. A ready-to-use GOV.9 RCP template lives in `policies/examples/rcp-gov-s3-org-only.json` (replace `o-exemplo` with your org ID), the `NewPolicyControl` test shows it working, and [docs/nova-policy-gov9.md](docs/nova-policy-gov9.md) has the full step by step.
+
+### Recording or sharing your screen? Recording mode
+
+Recording mode is **on by default**. In the terminal, in `summary.md` and in the CSVs, account numbers, organization, root and OU IDs, ARNs, emails, policy IDs, and account and OU names outside the lab are replaced with stable aliases. Lab names stay readable (`SCP-Lab`, `SCP-Lab-Exception`, `scp-gov-*`, `tag-gov-*`, `rcp-gov-*`). YAML and JSON keep the real values because plan and remediate need them, so don't open those on camera. Pass `--no-mask` to any script (or export `SCP_MASK=0`) to see real values, for example to build the CSV for Athena. The key in `outputs/.mask-key` keeps aliases stable across runs; it is git-ignored, never commit it.
+
+```bash
+cd ~
+python3 ~/AWS-Governance-as-Control-Plane/scripts/00_governance_scan.py --region us-east-1 --no-mask
+```
 
 ### Outputs and tests
 

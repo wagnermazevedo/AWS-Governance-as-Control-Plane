@@ -20,6 +20,7 @@ import os
 import _bootstrap  # noqa: F401
 from botocore.exceptions import ClientError
 
+from lib import LAB_PREFIXES, learn_policy_ids, mask
 from lib.aws import client, session
 from lib.io import repo_path
 from scanner import org as orgapi
@@ -86,6 +87,7 @@ def simulate_drift(org):
     summary = orgapi.find_policy_by_name(org, "SERVICE_CONTROL_POLICY", "scp-gov-baseline")
     if not summary:
         raise SystemExit("scp-gov-baseline não existe ainda. Rode o remediate em modo apply primeiro.")
+    learn_policy_ids(summary["Id"])
     doc = json.loads(orgapi.get_policy_content(org, summary["Id"]))
     for stmt in doc.get("Statement", []):
         if stmt.get("Sid") == "ProtectSecurityServices":
@@ -113,6 +115,7 @@ def destroy(org, cfn, stack):
             if _code(err) == "PolicyTypeNotEnabledException":
                 continue
             raise
+        learn_policy_ids(*(p["Id"] for p in policies))
         for policy in policies:
             if orgapi.tags_for(org, policy["Id"]).get(MANAGED_TAG_KEY) != MANAGED_TAG_VALUE:
                 continue
@@ -140,6 +143,7 @@ def destroy(org, cfn, stack):
 
 
 def main():
+    mask.setup(keep_prefixes=LAB_PREFIXES)  # modo gravação: antes do argparse, para aceitar --no-mask
     parser = argparse.ArgumentParser(description="Governance Lab Setup (organização de testes)")
     parser.add_argument("--region", default="us-east-1", help="Região do CloudFormation (use us-east-1)")
     parser.add_argument("--profile", default=None)

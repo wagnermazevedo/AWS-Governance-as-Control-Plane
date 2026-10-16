@@ -40,12 +40,20 @@ get_repo_description() {
 }
 
 anonimize_file() {
+    # Gera uma CÓPIA mascarada (<arquivo>.masked) para mostrar na tela ou compartilhar.
+    # O original nunca é alterado: o plan e o remediate precisam dos valores reais.
     local target_file="$1"
     if [ -f "$target_file" ]; then
-        echo "   -> Anonimizando dados sensíveis em: $target_file"
-        sed -i -E 's/[0-9]{12}/123456789012/g' "$target_file"
-        sed -i -E 's/arn:aws:([a-zA-Cal-z0-9_-]+):([a-z0-9_-]+):123456789012:([^ \"]+)/arn:aws:\1:\2:123456789012:resource-masked/g' "$target_file"
-        sed -i -E 's/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/user@masked-domain.local/g' "$target_file"
+        local masked_file="${target_file}.masked"
+        sed -E \
+            -e 's/[0-9]{12}/123456789012/g' \
+            -e 's/arn:(aws[a-z-]*):s3:::[a-z0-9.-]+/arn:\1:s3:::bucket-masked/g' \
+            -e 's/\bo-[a-z0-9]{10,32}\b/o-exemplo0000/g' \
+            -e 's/\bou-[a-z0-9]{4,32}-[a-z0-9]{8,32}\b/ou-exem-plo00000/g' \
+            -e 's/\b(AKIA|ASIA)[A-Z0-9]{16}\b/\1EXAMPLE000000000/g' \
+            -e 's/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/user@example.com/g' \
+            "$target_file" > "$masked_file"
+        echo "   -> Cópia mascarada para a tela: $masked_file (o original continua intacto)"
     fi
 }
 
@@ -140,7 +148,7 @@ exec_scan() {
         local input_yaml=$(ls -1td "$BASE_DIR/outputs"/202*/*.yaml "$repo_dir"/outputs/202*/*.yaml ./202*/*.yaml 2>/dev/null | head -n 1)
         if [ -n "$input_yaml" ]; then
             anonimize_file "$input_yaml"
-            echo "-> Artefato de entrada preparado e mascarado: $input_yaml"
+            echo "-> Artefato de entrada: $input_yaml"
         fi
     else
         echo "❌ Erro na execução do Scan."
@@ -173,7 +181,7 @@ exec_plan() {
     fi
 
     anonimize_file "$plan_output"
-    echo "-> Plano gerado e mascarado: $plan_output"
+    echo "-> Plano gerado: $plan_output"
 }
 
 exec_remediate() {
@@ -251,7 +259,7 @@ run_scan_all() {
             local latest_yaml=$(ls -1td "$BASE_DIR/outputs"/202*/*.yaml "$repo_path"/outputs/202*/*.yaml ./202*/*.yaml 2>/dev/null | head -n 1)
             if [ -n "$latest_yaml" ]; then
                 anonimize_file "$latest_yaml"
-                echo "   ✅ Scan concluído e mascarado: $latest_yaml"
+                echo "   ✅ Scan concluído: $latest_yaml"
                 success_scans=$((success_scans + 1))
             fi
         else

@@ -31,3 +31,4 @@
 - **Saída de emergência:** as SCPs isentam roles `breakglass-*`.
 - **Limites da API:** o conteúdo é minificado e validado contra o limite de 5120 caracteres de SCP antes do envio.
 - **Destroy conservador:** o lab nunca desabilita tipos de política, porque desabilitar SCP desanexa todas as SCPs da organização.
+- **Permission sets fora do escopo:** os permission sets do IAM Identity Center ficam abaixo do teto das SCPs, mas este módulo não os cria nem altera. Eles são auditados no episódio 5, IAM & Identity.

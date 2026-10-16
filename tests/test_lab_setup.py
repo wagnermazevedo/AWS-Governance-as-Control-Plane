@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.join(REPO, "scripts"))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from recorder import Recorder  # noqa: E402
+from mask_helpers import isolated_streams, reset_mask  # noqa: E402
 
 SCRIPT = os.path.join(REPO, "scripts", "99_governance_lab_setup.py")
 LAB_OU, EXC_OU = "ou-ab12-11111111", "ou-ab12-22222222"
@@ -38,10 +39,11 @@ def make_clients():
 class LabSetup(unittest.TestCase):
     def run_all(self, clients, *runs):
         state = os.path.join(tempfile.mkdtemp(), ".lab_state.json")
+        reset_mask()
         for args in runs:
             with mock.patch("lib.aws.client", side_effect=lambda sess, svc: clients[svc]), \
                  mock.patch("lib.aws.session", return_value=None), \
-                 mock.patch.object(sys, "argv", ["99", *args]):
+                 mock.patch.object(sys, "argv", ["99", *args]), isolated_streams():
                 ns = runpy.run_path(SCRIPT, run_name="not_main")
                 ns["main"].__globals__["STATE_FILE"] = state
                 ns["main"]()

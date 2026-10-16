@@ -14,7 +14,7 @@ from typing import Any, Dict, Tuple
 
 import _bootstrap  # noqa: F401
 
-from lib import API_VERSION
+from lib import API_VERSION, LAB_PREFIXES, learn_from_items, mask
 from scanner.controls import expected_state
 from lib.io import DEFAULT_OUTPUTS, DEFAULT_PLAN, latest_file, repo_path, load_yaml, write_yaml
 
@@ -51,6 +51,7 @@ def decide(item: Dict[str, Any], rules: Dict[str, Any], exc_cfg: Dict[str, Any])
 
 
 def main():
+    mask.setup(keep_prefixes=LAB_PREFIXES)  # modo gravação: antes do argparse, para aceitar --no-mask
     parser = argparse.ArgumentParser(description="AWS Governance Plan (não altera recursos)")
     parser.add_argument("--input-yaml", default=None,
                         help="YAML gerado pelo 00_governance_scan.py. Padrão: o scan mais recente em outputs/")
@@ -74,6 +75,7 @@ def main():
     exc_cfg = rules_doc.get("exception", {}) or {}
 
     items = (doc.get("spec") or {}).get("items", []) or []
+    learn_from_items(items)
     counts: Dict[str, int] = {"AUTO": 0, "MANUAL": 0, "EXCEPTION": 0, "NO_ACTION": 0}
     for item in items:
         decision, reason, action, params = decide(item, rules, exc_cfg)

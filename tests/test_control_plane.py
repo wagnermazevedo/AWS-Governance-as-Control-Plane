@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fake_org import FakeOrg, FakeSts  # noqa: E402
 from recorder import Recorder  # noqa: E402
+from mask_helpers import isolated_streams, reset_mask  # noqa: E402
 from lib.io import load_yaml  # noqa: E402
 from lib.policies import SIZE_LIMITS, check_size, compact, load_policy  # noqa: E402
 
@@ -44,8 +45,10 @@ def no_control_tower():
 
 
 class Runner:
-    def __init__(self, org, config=None, controltower=None):
+    def __init__(self, org, config=None, controltower=None, extra_args=()):
+        reset_mask()
         self.org = org
+        self.extra_args = list(extra_args)  # ex.: ["--no-mask"] em todas as etapas
         self.config = config or no_config()
         self.controltower = controltower or no_control_tower()
         self.tmp = tempfile.mkdtemp()
@@ -54,7 +57,7 @@ class Runner:
         fakes = {"organizations": self.org, "sts": FakeSts(), "config": self.config, "controltower": self.controltower}
         with mock.patch("lib.aws.client", side_effect=lambda sess, svc: fakes[svc]), \
              mock.patch("lib.aws.session", return_value=None), \
-             mock.patch.object(sys, "argv", [script, *args]):
+             mock.patch.object(sys, "argv", [script, *args, *self.extra_args]), isolated_streams():
             for name in ("00_governance_scan", "01_governance_plan", "02_governance_remediate"):
                 sys.modules.pop(name, None)
             try:

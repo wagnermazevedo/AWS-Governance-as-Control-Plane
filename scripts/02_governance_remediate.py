@@ -13,7 +13,7 @@ import os
 
 import _bootstrap  # noqa: F401
 
-from lib import API_VERSION
+from lib import API_VERSION, LAB_PREFIXES, learn_from_items, learn_policy_ids, mask
 from remediate import REGISTRY
 from lib.aws import client, session
 from lib.io import DEFAULT_OUTPUTS, DEFAULT_PLAN, load_yaml, markdown_table, new_run_dir, utc_timestamp, write_csv, write_json, write_text
@@ -22,6 +22,7 @@ CSV_FIELDS = ["itemId", "control", "decision", "action", "resource", "ok", "mess
 
 
 def main():
+    mask.setup(keep_prefixes=LAB_PREFIXES)  # modo gravação: antes do argparse, para aceitar --no-mask
     parser = argparse.ArgumentParser(description="AWS Governance Remediate")
     parser.add_argument("--region", required=True)
     parser.add_argument("--profile", default=None)
@@ -41,6 +42,7 @@ def main():
     sim = {}  # estado simulado compartilhado entre ações da mesma execução
 
     items = (plan.get("spec") or {}).get("items", []) or []
+    learn_from_items(items)
     summary = {"total": len(items), "executed": 0, "succeeded": 0, "failed": 0, "manual": 0, "exception": 0, "noAction": 0}
     results = []
 
@@ -63,6 +65,7 @@ def main():
                 except Exception as err:  # registra e segue: um item quebrado não para os outros
                     outcome = {"ok": False, "message": f"ERROR: {err}", "changes": []}
             summary["succeeded" if outcome["ok"] else "failed"] += 1
+            learn_policy_ids(outcome["message"])  # políticas recém-criadas
             entry.update(ok=outcome["ok"], message=outcome["message"], changes=outcome.get("changes", []))
         elif decision == "EXCEPTION":
             summary["exception"] += 1

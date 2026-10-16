@@ -2,6 +2,10 @@
 
 Regra do template: saídas nunca são sobrescritas. Cada execução ganha a sua
 própria pasta com data e hora; se a pasta já existir, um sufixo é adicionado.
+
+Modo gravação (lib/mask.py): CSV e summary.md são para gente e saem mascarados.
+YAML e JSON ficam com os valores reais, porque o plan e o remediate leem esses
+arquivos para agir. Nenhum script lê CSV ou summary.md de volta.
 """
 
 import csv
@@ -11,6 +15,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List
 
 import yaml
+
+from lib import mask
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -52,6 +58,11 @@ def load_yaml(path: str) -> Dict[str, Any]:
         return yaml.safe_load(f) or {}
 
 
+def _masked(value: Any) -> Any:
+    """Saídas para gente (CSV, summary.md): apelidos no lugar dos valores reais."""
+    return mask.mask_value(value) if mask.enabled() else value
+
+
 def write_yaml(path: str, data: Dict[str, Any]) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -68,12 +79,12 @@ def write_csv(path: str, rows: Iterable[Dict[str, Any]], fields: List[str]) -> N
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
         writer.writeheader()
         for row in rows:
-            writer.writerow(row)
+            writer.writerow(_masked(row))
 
 
 def write_text(path: str, text: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
-        f.write(text)
+        f.write(_masked(text))
 
 
 def markdown_table(rows: List[Dict[str, Any]], fields: List[str]) -> str:
@@ -81,6 +92,6 @@ def markdown_table(rows: List[Dict[str, Any]], fields: List[str]) -> str:
         return "_Nenhum item._\n"
     lines = ["| " + " | ".join(fields) + " |", "|" + "---|" * len(fields)]
     for row in rows:
-        cells = [str(row.get(field, "")).replace("|", "\\|").replace("\n", " ") for field in fields]
+        cells = [str(_masked(row.get(field, ""))).replace("|", "\\|").replace("\n", " ") for field in fields]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"

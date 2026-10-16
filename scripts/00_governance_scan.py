@@ -14,7 +14,7 @@ from collections import Counter
 
 import _bootstrap  # noqa: F401
 
-from lib import API_VERSION
+from lib import API_VERSION, LAB_PREFIXES, learn_from_items, mask
 from lib.aws import client, session
 from scanner.controls import evaluate
 from lib.io import DEFAULT_OUTPUTS, load_yaml, markdown_table, new_run_dir, repo_path, utc_timestamp, write_csv, write_json, write_text, write_yaml
@@ -37,6 +37,7 @@ def flatten(item):
 
 
 def main():
+    mask.setup(keep_prefixes=LAB_PREFIXES)  # modo gravação: antes do argparse, para aceitar --no-mask
     parser = argparse.ArgumentParser(description="AWS Governance Scan (somente leitura)")
     parser.add_argument("--region", required=True)
     parser.add_argument("--profile", default=None)
@@ -51,6 +52,7 @@ def main():
 
     clients = {"config": client(sess, "config"), "controltower": client(sess, "controltower")}
     context, items = evaluate(org, rules_doc, clients)
+    learn_from_items(items)  # nomes de OUs fora do lab e de contas viram apelido na tela
     for idx, item in enumerate(items, start=1):
         item["id"] = f"gov-item-{idx:06d}"
 
