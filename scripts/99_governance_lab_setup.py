@@ -79,7 +79,7 @@ def setup(org, cfn, stack, move_account):
         state = _load_state()
         state["movedAccount"] = {"accountId": move_account, "originalParent": root_id}
         _save_state(state)
-        print(f"[OK] Conta {move_account} movida para a OU SCP-Lab")
+        print(f"[OK] Conta {mask.mask_text(move_account)} movida para a OU SCP-Lab")
     print("[OK] Laboratório pronto. Lembrete: SCP não se aplica à conta de gerenciamento.")
 
 
@@ -106,7 +106,7 @@ def destroy(org, cfn, stack):
         if parents and parents[0] in lab_ous:
             org.move_account(AccountId=moved["accountId"], SourceParentId=parents[0],
                              DestinationParentId=moved["originalParent"])
-            print(f"[OK] Conta {moved['accountId']} devolvida para a raiz")
+            print(f"[OK] Conta {mask.mask_text(moved['accountId'])} devolvida para a raiz")
 
     for policy_type in POLICY_TYPES:
         try:
@@ -166,7 +166,7 @@ def main():
         return
 
     info = orgapi.describe_organization(org)
-    print(f"Organização {info['Id']} · conta de gerenciamento {info['MasterAccountId']}")
+    print(f"Organização {mask.mask_text(info['Id'])} · conta de gerenciamento {mask.mask_text(info['MasterAccountId'])}")
     if not args.yes and input("Digite LAB para confirmar que esta é uma organização de testes: ").strip() != "LAB":
         raise SystemExit("Cancelado.")
     setup(org, cfn, args.stack_name, args.move_account)
