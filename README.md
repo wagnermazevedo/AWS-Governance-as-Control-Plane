@@ -76,6 +76,17 @@ O GOV.7 e o GOV.8 só leem. O agregador do Config e os controles do Control Towe
 - cada política é validada contra o limite de tamanho do AWS Organizations antes de ser enviada;
 - respeita a cota de políticas por OU (5 SCPs). Com Control Tower ela enche rápido, então o remediate para com uma mensagem clara (`QUOTA`) em vez de falhar no meio do apply.
 
+### Pré-requisitos do ambiente (setup manual no console, feito uma vez)
+
+Os scripts cuidam das OUs do laboratório, das managed rules do Config e das SCPs. A **base de governança** você monta à mão no console, antes, para simular o ambiente inteiro:
+
+1. **AWS Organizations com todas as features.** Sem *all features* não existe SCP nem tag policy, e o Control Tower exige essa configuração.
+2. **AWS Control Tower habilitado** na conta de gerenciamento → cria a **landing zone**: contas de **Log Archive** e **Audit** (e-mails únicos; plus-addressing do Gmail resolve), a OU fundacional **Security**, uma OU adicional (ex. **Sandbox**) e o **IAM Identity Center**.
+3. **AWS Config** ligado pela landing zone (*Config integration*): o recorder grava em cada conta e a conta **Audit** vira a agregadora/administradora delegada — é o que o GOV.7 confere.
+4. **Account Factory** pronto: o principal operador (um usuário IAM, **não** o root) com acesso ao *AWS Control Tower Account Factory Portfolio* no Service Catalog (na **região home** do CT) e **uma OU registrada**. Daí saem os dois caminhos de conta: **criar conta nova** (Account Factory → Create account) e **onboarding** de uma conta existente (enroll no CT).
+
+> O Control Tower e a landing zone levam tempo de propagação (dezenas de minutos). Confirme o status "Landing zone set up" e a OU alvo como **Registered** antes de rodar os scripts.
+
 ### Mão na massa no AWS CloudShell
 
 Rode na conta de **gerenciamento** de uma organização de testes.
@@ -101,6 +112,11 @@ Quer ver a SCP funcionando de verdade? Mova uma conta-membro **de testes** para 
 ```bash
 python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py --move-account <ID-da-conta-de-testes>
 ```
+
+**Como uma conta entra na governança (dois caminhos):**
+
+- **Conta nova:** pelo **Account Factory** do Control Tower, a conta é provisionada já dentro de uma OU registrada, com os guardrails ligados desde o primeiro minuto. Nada de criar e lembrar de mover depois.
+- **Conta que já existe (onboarding):** faça o *enroll* da conta no Control Tower, ou mova-a para a `SCP-Lab` com `--move-account <ID-da-conta>`. Ao entrar na OU governada, ela herda o teto das SCPs na hora.
 
 **3. Rode o ciclo**
 
