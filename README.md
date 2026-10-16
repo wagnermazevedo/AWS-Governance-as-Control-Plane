@@ -29,7 +29,7 @@ No episódio anterior, o Security Hub mostrou o que já estava errado e a gente 
 
 O **Control Tower** organiza a casa: cria a landing zone (com as contas de Log Archive e Audit), registra as OUs e oferece controles de três tipos. Os **preventivos** viram SCPs, os **detectivos** viram regras do AWS Config, e os **proativos** viram hooks do CloudFormation, que barram o recurso antes de ele nascer. Ele também traz o **Account Factory**, a fábrica de contas: cada conta nova é criada **já dentro da OU certa**, com os guardrails ligados desde o começo, em vez de alguém criar a conta na mão e depois lembrar de movê-la — o descuido que o **GOV.6** justamente aponta.
 
-> **O Control Tower é opcional neste módulo.** Sem ele, o GOV.8 fica `NOT_APPLICABLE` e as SCPs fazem o papel preventivo sozinhas — é o cenário de quem está no **AWS Organizations puro**. A padronização de contas novas, aí, fica por sua conta: criar pela API do Organizations e mover para a OU certa (é a disciplina que o GOV.6 cobra). O **Account Factory** é o próximo degrau, quando você adotar o Control Tower.
+> **Neste episódio o Control Tower está habilitado.** Com ele, o Account Factory e o AWS Config já vêm montados pela landing zone. O laboratório (`99`) ainda liga a camada detectiva com **duas managed rules do AWS Config**: `CLOUD_TRAIL_ENABLED` (casa com o GOV.3) e `REQUIRED_TAGS` (casa com o GOV.5). Se a sua organização **não** usa Control Tower, o GOV.8 fica `NOT_APPLICABLE` e as SCPs fazem o papel preventivo sozinhas — mas aí o Account Factory e as managed rules não existem, e a disciplina de colocar cada conta nova na OU certa passa a ser sua.
 
 O **AWS Config** é a memória da configuração. Ele grava cada mudança e avalia regras, e é ele que está por trás dos controles do Security Hub do episódio anterior. Com um agregador na conta de auditoria, você enxerga a organização inteira num lugar só.
 
@@ -94,7 +94,7 @@ pip3 install -r ~/AWS-Governance-as-Control-Plane/requirements.txt
 python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py
 ```
 
-O script 99 cria duas OUs: a `SCP-Lab`, que a gente vai governar, e a `SCP-Lab-Exception`, que já nasce com a tag de exceção e um dono. Nenhuma política anexada ainda.
+O script 99 cria duas OUs: a `SCP-Lab`, que a gente vai governar, e a `SCP-Lab-Exception`, que já nasce com a tag de exceção e um dono. Nenhuma SCP anexada ainda. Ele também cria **duas managed rules do AWS Config** (`gov-lab-cloudtrail-enabled` e `gov-lab-required-tags`), a camada detectiva do laboratório, ligadas ao GOV.3 e ao GOV.5. Elas precisam do AWS Config gravando — com o Control Tower ligado, ele já está; sem o recorder, o script avisa e pula essa parte.
 
 Quer ver a SCP funcionando de verdade? Mova uma conta-membro **de testes** para a `SCP-Lab`:
 
@@ -137,7 +137,7 @@ Rode o plan e o apply de novo, e o texto que está no repositório volta para a 
 python3 ~/AWS-Governance-as-Control-Plane/scripts/99_governance_lab_setup.py --destroy
 ```
 
-Devolve a conta movida para a raiz, apaga só as políticas deste módulo (e só se não estiverem anexadas fora do laboratório) e remove as OUs. Os tipos de política continuam habilitados de propósito: desabilitar SCP desanexa todas as SCPs da organização.
+Devolve a conta movida para a raiz, apaga só as políticas deste módulo (e só se não estiverem anexadas fora do laboratório), remove as duas managed rules do Config (`gov-lab-*`) e remove as OUs. Os tipos de política continuam habilitados de propósito: desabilitar SCP desanexa todas as SCPs da organização.
 
 ### Quer adicionar uma política nova?
 
@@ -198,7 +198,7 @@ python3 ~/AWS-Governance-as-Control-Plane/scripts/00_governance_scan.py --region
 - **Scan:** `organizations:Describe*`, `organizations:List*`, `config:DescribeConfigurationRecorderStatus`, `config:DescribeConfigurationAggregators`, `controltower:ListLandingZones`, `controltower:ListEnabledControls`, `sts:GetCallerIdentity`
 - **Região:** rode na região de origem (*home region*) do Control Tower, se você usa um. É nela que o GOV.8 encontra a landing zone.
 - **Apply:** além das de scan, `organizations:EnablePolicyType`, `CreatePolicy`, `UpdatePolicy`, `AttachPolicy` e `TagResource`
-- **Laboratório:** `cloudformation:*` na stack do lab, `organizations:CreateOrganizationalUnit`, `DeleteOrganizationalUnit`, `MoveAccount`, `DetachPolicy` e `DeletePolicy`
+- **Laboratório:** `cloudformation:*` na stack do lab, `organizations:CreateOrganizationalUnit`, `DeleteOrganizationalUnit`, `MoveAccount`, `DetachPolicy` e `DeletePolicy`, mais `config:DescribeConfigurationRecorderStatus`, `config:PutConfigRule` e `config:DeleteConfigRule` para as duas managed rules
 
 ### Testes
 
@@ -242,7 +242,7 @@ In the previous episode, Security Hub showed what was already wrong and we fixed
 
 That is what this repository is about. Governance here has three layers on top of AWS Organizations: **AWS Control Tower** (landing zone, a catalog of preventive, detective and proactive controls, and **Account Factory**, which vends every new account straight into the right OU with guardrails on from day one), **AWS Config** (records and evaluates every resource configuration across accounts) and **Service Control Policies** plus tag policies (**organization-wide limits**, written as code and versioned right here). The module ships its own SCPs and coexists with Control Tower: it only touches policies tagged as its own.
 
-> **Control Tower is optional here.** Without it, GOV.8 reports `NOT_APPLICABLE` and the SCPs do the preventive job on their own — the plain **AWS Organizations** case. Standardizing new accounts is then on you (create via the Organizations API and move to the right OU, the discipline GOV.6 flags); Account Factory is the next step once you adopt Control Tower.
+> **Control Tower is enabled in this episode.** Account Factory and AWS Config come with the landing zone. The lab (`99`) also lights up the detective layer with **two AWS Config managed rules**: `CLOUD_TRAIL_ENABLED` (maps to GOV.3) and `REQUIRED_TAGS` (maps to GOV.5). Without Control Tower, GOV.8 reports `NOT_APPLICABLE` and the SCPs do the preventive job on their own — but then Account Factory and the managed rules don't exist, and placing each new account in the right OU is on you (the discipline GOV.6 flags).
 
 > Part of the **AWS Security Control Plane** series, created from the [AWS Security Control Plane Scripts](https://github.com/wagnermazevedo/AWS-Security-Control-Plane-Scripts) template.
 >

@@ -30,6 +30,16 @@ STATE_FILE = repo_path("lab_insecure", ".lab_state.json")
 TEMPLATE = repo_path("lab_insecure", "governance-lab.yaml")
 POLICY_TYPES = ("SERVICE_CONTROL_POLICY", "RESOURCE_CONTROL_POLICY", "TAG_POLICY")
 
+# Camada detectiva do laboratório: 2 managed rules do AWS Config, cada uma ligada a
+# um controle habilitado do episódio. O Config é gravado pelo Control Tower (landing zone).
+CONFIG_RULES = (
+    {"name": "gov-lab-cloudtrail-enabled", "source": "CLOUD_TRAIL_ENABLED", "params": None,
+     "relates": "GOV.3 (proteção do CloudTrail)"},
+    {"name": "gov-lab-required-tags", "source": "REQUIRED_TAGS",
+     "params": {"tag1Key": "Environment", "tag2Key": "Owner", "tag3Key": "CostCenter"},
+     "relates": "GOV.5 (tag policy)"},
+)
+
 
 def _code(err):
     return err.response.get("Error", {}).get("Code", "")
@@ -142,6 +152,39 @@ def destroy(org, cfn, stack):
     print("Os tipos de política continuam habilitados na raiz (desabilitar SCP desanexa todas as SCPs da organização).")
 
 
+def _config_recording(config):
+    try:
+        recorders = config.describe_configuration_recorder_status().get("ConfigurationRecordersStatus", [])
+    except ClientError:
+        return False
+    return any(r.get("recording") for r in recorders)
+
+
+def setup_config_rules(config):
+    """Cria as 2 managed rules do AWS Config (camada detectiva do lab). Exige o Config
+    gravando, o que o Control Tower já provê ao montar a landing zone."""
+    if not _config_recording(config):
+        print("[AVISO] O AWS Config não está gravando nesta região. Habilite o Control Tower "
+              "(ele liga o Config) e rode de novo. Pulando as 2 managed rules do laboratório.")
+        return
+    for r in CONFIG_RULES:
+        rule = {"ConfigRuleName": r["name"], "Source": {"Owner": "AWS", "SourceIdentifier": r["source"]}}
+        if r["params"]:
+            rule["InputParameters"] = json.dumps(r["params"])
+        config.put_config_rule(ConfigRule=rule)
+        print(f"[OK] Config rule {r['name']} criada — relacionada ao {r['relates']}")
+
+
+def destroy_config_rules(config):
+    for r in CONFIG_RULES:
+        try:
+            config.delete_config_rule(ConfigRuleName=r["name"])
+            print(f"[OK] Config rule {r['name']} removida")
+        except ClientError as err:
+            if _code(err) != "NoSuchConfigRuleException":
+                raise
+
+
 def main():
     mask.setup(keep_prefixes=LAB_PREFIXES)  # modo gravação: antes do argparse, para aceitar --no-mask
     parser = argparse.ArgumentParser(description="Governance Lab Setup (organização de testes)")
@@ -157,9 +200,11 @@ def main():
     sess = session(args.profile, args.region)
     org = client(sess, "organizations")
     cfn = client(sess, "cloudformation")
+    config = client(sess, "config")
 
     if args.destroy:
         destroy(org, cfn, args.stack_name)
+        destroy_config_rules(config)
         return
     if args.simulate_drift:
         simulate_drift(org)
@@ -170,6 +215,7 @@ def main():
     if not args.yes and input("Digite LAB para confirmar que esta é uma organização de testes: ").strip() != "LAB":
         raise SystemExit("Cancelado.")
     setup(org, cfn, args.stack_name, args.move_account)
+    setup_config_rules(config)
 
 
 if __name__ == "__main__":

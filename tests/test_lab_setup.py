@@ -33,7 +33,10 @@ def make_clients():
         "StackName": "governance-control-plane-lab", "CreationTime": "2026-10-15", "StackStatus": "CREATE_COMPLETE",
         "Outputs": [{"OutputKey": "ScpLabOUId", "OutputValue": LAB_OU},
                     {"OutputKey": "ScpLabExceptionOUId", "OutputValue": EXC_OU}]}]}})
-    return {"organizations": org, "cloudformation": cfn}
+    config = Recorder("config", {
+        "describe_configuration_recorder_status": {"ConfigurationRecordersStatus": [{"name": "default", "recording": True}]},
+    })
+    return {"organizations": org, "cloudformation": cfn, "config": config}
 
 
 class LabSetup(unittest.TestCase):
@@ -62,6 +65,11 @@ class LabSetup(unittest.TestCase):
         self.assertEqual(moves[1]["DestinationParentId"], "r-ab12", "destroy devolve a conta para a raiz")
         deleted = [kw["PolicyId"] for s, n, kw in self.calls(clients) if n == "delete_policy"]
         self.assertEqual(sorted(set(deleted)), ["p-11111111", "p-22222222"])
+        # O lab cria 2 managed rules do Config (camada detectiva) e o --destroy as remove.
+        created_rules = [kw["ConfigRule"]["ConfigRuleName"] for s, n, kw in self.calls(clients) if n == "put_config_rule"]
+        self.assertEqual(sorted(created_rules), ["gov-lab-cloudtrail-enabled", "gov-lab-required-tags"])
+        deleted_rules = [kw["ConfigRuleName"] for s, n, kw in self.calls(clients) if n == "delete_config_rule"]
+        self.assertEqual(sorted(deleted_rules), ["gov-lab-cloudtrail-enabled", "gov-lab-required-tags"])
         self.assertIn(("cloudformation", "delete_stack"), names)
         self.assertNotIn(("organizations", "disable_policy_type"), names)
         self.assertFalse(os.path.exists(state))
