@@ -25,6 +25,27 @@ No episódio anterior, o Security Hub mostrou o que já estava errado e a gente 
 >
 > ⚠️ **Rode numa organização de testes.** Este módulo cria e anexa SCPs, e uma SCP mal escrita pode trancar contas inteiras.
 
+### Antes de tudo: clone (ou atualize) a série no AWS CloudShell
+
+O AWS CloudShell é um terminal no navegador que já vem autenticado, com a AWS CLI e o Git instalados. É o jeito mais rápido de testar a série inteira.
+
+**Clone (ou atualize) os módulos da série no `$HOME`**
+
+```bash
+cd ~
+for repo in $(gh repo list wagnermazevedo -L 100 --json name -q '.[].name' | grep -E '^AWS-.*Control-Plane'); do
+    if [ -d "$repo/.git" ]; then
+        git -C "$repo" pull --ff-only          # já clonado: só atualiza
+    else
+        gh repo clone "wagnermazevedo/$repo"   # primeira vez: clona
+    fi
+done
+```
+
+O mesmo comando serve para a primeira vez e para atualizar depois. O `--ff-only` nunca mistura mudanças: se você alterou algum arquivo localmente, o Git avisa e não mexe naquele repositório.
+
+(Se a GitHub CLI não estiver autenticada, rode `gh auth login` antes. Ou clone só o módulo que quiser com `git clone`.)
+
 ### Antes de começar: como as três camadas se encaixam
 
 O **Control Tower** organiza a casa: cria a landing zone (com as contas de Log Archive e Audit), registra as OUs e oferece controles de três tipos. Os **preventivos** viram SCPs, os **detectivos** viram regras do AWS Config, e os **proativos** viram hooks do CloudFormation, que barram o recurso antes de ele nascer. Ele também traz o **Account Factory**, a fábrica de contas: cada conta nova é criada **já dentro da OU certa**, com os guardrails ligados desde o começo, em vez de alguém criar a conta na mão e depois lembrar de movê-la — o descuido que o **GOV.6** justamente aponta.
@@ -265,6 +286,27 @@ That is what this repository is about. Governance here has three layers on top o
 > ⚠️ **Use a test organization.** This module creates and attaches SCPs.
 
 **Quick reminder:** an SCP never grants permissions, it sets the ceiling. It applies even to member-account root users and to any IAM Identity Center permission set, but not to the management account. Permission sets themselves (who gets which access, in which account) are covered in episode 5, IAM & Identity; this module never creates or changes them.
+
+### Before anything: clone (or update) the series in AWS CloudShell
+
+AWS CloudShell is a browser-based terminal that comes already authenticated, with the AWS CLI and Git installed. It is the fastest way to try the whole series.
+
+**Clone (or update) the series modules in `$HOME`**
+
+```bash
+cd ~
+for repo in $(gh repo list wagnermazevedo -L 100 --json name -q '.[].name' | grep -E '^AWS-.*Control-Plane'); do
+    if [ -d "$repo/.git" ]; then
+        git -C "$repo" pull --ff-only          # already cloned: just update
+    else
+        gh repo clone "wagnermazevedo/$repo"   # first time: clone
+    fi
+done
+```
+
+The same command works the first time and for later updates. `--ff-only` never mixes changes: if you changed a file locally, Git warns you and leaves that repository alone.
+
+(If the GitHub CLI is not authenticated, run `gh auth login` first. Or clone only the module you want with `git clone`.)
 
 ### Controls
 
